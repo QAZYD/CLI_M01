@@ -1,7 +1,8 @@
 #pragma once
+#include "SymbolTable.h"
 
 class ICommand {
 public:
-    virtual ~ICommand() = default; // Clean up memory safely
-    virtual void execute() = 0;    // Pure virtual function
+    virtual ~ICommand() = default;
+    virtual void execute(SymbolTable& table) = 0;
 };
