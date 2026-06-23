@@ -7,6 +7,7 @@ CommandProcessor::CommandProcessor() {
     commandMap["initialize"]      = &CommandProcessor::handleInitialize;
     commandMap["screen_s"]        = &CommandProcessor::handleScreen_s;
     commandMap["screen_ls"]       = &CommandProcessor::handleScreen_ls;
+    commandMap["screen_r"]        = &CommandProcessor::handleScreen_r;
     commandMap["scheduler-start"] = &CommandProcessor::handleSchedulerStart;
     commandMap["scheduler-stop"]  = &CommandProcessor::handleSchedulerStop;
     commandMap["report-util"]     = &CommandProcessor::handleReportUtil;
@@ -56,6 +57,10 @@ void CommandProcessor::handleScreen_s() {
 }
 
 void CommandProcessor::handleScreen_ls() {
+    std::cout << "\n  [screen] command recognized. Doing something.\n";
+}
+
+void CommandProcessor::handleScreen_r(){
     std::cout << "\n  [screen] command recognized. Doing something.\n";
 }
 

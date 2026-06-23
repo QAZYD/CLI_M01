@@ -21,6 +21,7 @@ private:
     // Command handlers
     void handleInitialize();
     void handleScreen_s();
+    void handleScreen_r();
     void handleScreen_ls();
     void handleSchedulerStart();
     void handleSchedulerStop();
