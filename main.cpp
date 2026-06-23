@@ -27,7 +27,7 @@ int main() {
                 inputBuffer.clear();
 
                 if (running) {
-                    std::cout << "opesy terminal:\\> ";
+                    std::cout << "root:\\> ";
                 }
 
             } else if (ch == '\b') {
