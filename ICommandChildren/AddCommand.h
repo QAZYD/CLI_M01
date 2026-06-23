@@ -1,6 +1,6 @@
 #pragma once
-#include "ICommand.h"
-#include "SymbolTable.h"
+#include "coreDependencies/ICommand.h"
+#include "coreDependencies/SymbolTable.h"
 #include <string>
 #include <cctype>
 #include <algorithm>

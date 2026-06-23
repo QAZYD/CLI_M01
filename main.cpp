@@ -57,14 +57,14 @@ int main() {
 #include <iostream>
 #include <memory>
 #include <vector>
-#include "SymbolTable.h"
-#include "ICommand.h"
-// Include your command implementations here
-// (If you placed them in separate files, include them all)
-#include "DeclareCommand.h"
-#include "PrintCommand.h"
-#include "AddCommand.h"
-#include "SubtractCommand.h"
+#include "coredependencies/SymbolTable.h"
+#include "coredependencies/ICommand.h"
+
+// command implementations 
+#include "ICommandChildren/DeclareCommand.h"
+#include "ICommandChildren/PrintCommand.h"
+#include "ICommandChildren/AddCommand.h"
+#include "ICommandChildren/SubtractCommand.h"
 
 int main() {
     std::cout << "========================================" << std::endl;
