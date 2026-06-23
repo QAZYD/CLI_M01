@@ -93,5 +93,5 @@ public:
         uint16_t result = (val1 > val2) ? (val1 - val2) : 0;
         
         table.set(destVar, result);
-    }
-};
+    } 
+}; 
