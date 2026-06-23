@@ -26,6 +26,8 @@ public:
     ProcessState getState() const;
     std::string getName() const;
 
+    void setState(ProcessState State);
+
     // Symbol Table access
     SymbolTable& getSymbolTable();
 
