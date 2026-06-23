@@ -57,8 +57,8 @@ int main() {
 #include <iostream>
 #include <memory>
 #include <vector>
-#include "coredependencies/SymbolTable.h"
-#include "coredependencies/ICommand.h"
+#include "coreDependencies/SymbolTable.h"
+#include "coreDependencies/ICommand.h"
 
 // command implementations 
 #include "ICommandChildren/DeclareCommand.h"
