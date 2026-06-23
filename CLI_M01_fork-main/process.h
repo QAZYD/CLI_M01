@@ -1,0 +1,48 @@
+
+#pragma once
+#include <memory>
+#include <vector>
+#include <string>
+#include "ICommand.h"
+#include "SymbolTable.h"
+
+class Process {
+public:
+    enum ProcessState {
+        READY,
+        RUNNING,
+        WAITING,
+        FINISHED
+    };
+
+    Process(int pid, std::string name);
+
+    void addCommand(std::shared_ptr<ICommand> command);
+    void executeCurrentCommand();
+    void moveToNextLine();
+    // added sleep
+    void setSleepTicks(int ticks);
+    
+
+    bool isFinished() const;
+    int getPID() const;
+    ProcessState getState() const;
+    std::string getName() const;
+    // added sleep
+    int getSleepTicks() const;
+
+    // Symbol Table access
+    SymbolTable& getSymbolTable();
+
+private:
+    int pid;
+    std::string name;
+    ProcessState currentState;
+    int commandCounter;
+    // added sleep
+    int sleepTick;
+    
+    std::vector<std::shared_ptr<ICommand>> commandList;
+    SymbolTable symbolTable;
+};
+
