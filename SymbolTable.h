@@ -2,7 +2,7 @@
 
 #include <string>
 #include <unordered_map>
-#include <cstdint> 
+#include <cstdint> // Provides uint16_t
 
 class SymbolTable {
 public:
