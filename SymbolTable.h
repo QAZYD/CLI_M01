@@ -2,11 +2,7 @@
 
 #include <string>
 #include <unordered_map>
-#include <variant>
-#include <stdexcept>
-
-// Define our types clearly. std::variant holds EXACTLY one of these at a time.
-using VariableValue = std::variant<int, char, float>;
+#include <cstdint> // Provides uint16_t
 
 class SymbolTable {
 public:
@@ -14,14 +10,13 @@ public:
     bool contains(const std::string& name) const;
     void remove(const std::string& name);
 
-    // Setters (Overloaded for different types)
-    void set(const std::string& name, int value);
-    void set(const std::string& name, char value);
-    void set(const std::string& name, float value);
+    // Simplified Setter for uint16_t
+    void set(const std::string& name, uint16_t value);
 
-    // Getters
-    VariableValue get(const std::string& name) const;
+    // Getter that implements the "auto-declare to 0" rule
+    uint16_t get(const std::string& name);
 
 private:
-    std::unordered_map<std::string, VariableValue> table;
+    // Simple map: variable name -> 16-bit unsigned integer
+    std::unordered_map<std::string, uint16_t> table;
 };
