@@ -9,3 +9,14 @@ Finished Processes: 1
 PID | Name           | State      | Core | Last Updated
 1 | screen1         |   FINISHED |    - | 2026-06-26 00:38:09
 ==============================================
+CSOPESY Process Report
+==============================================
+CPU Utilization : 50.0% (1/2 cores used)
+Cores Used      : 1
+Cores Available : 1
+Running Processes: 0
+Finished Processes: 1
+----------------------------------------------
+PID | Name           | State      | Core | Last Updated
+1 | p1              |   FINISHED |    0 | 2026-06-26 02:52:17
+==============================================

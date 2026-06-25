@@ -7,6 +7,7 @@
 #include "configManager.h"
 #include "Scheduler.h"
 #include "ProcessControl.h" 
+#include "ProcessGenerator.h"
 
 class CommandProcessor {
 public:
@@ -24,7 +25,8 @@ private:
     // Core States & Dependencies
     ConfigManager configManager;
     bool isInitialized = false;
-    std::unique_ptr<Scheduler> activeScheduler = nullptr;
+    std::shared_ptr<Scheduler> activeScheduler = nullptr;
+    std::shared_ptr<ProcessGenerator> generator = nullptr;
 
     // Screen & Process Context Tracking
     std::shared_ptr<Process> currentAttachedProcess = nullptr; 

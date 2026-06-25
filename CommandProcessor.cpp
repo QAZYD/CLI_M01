@@ -1,6 +1,8 @@
 #include "coreDependencies/CommandProcessor.h"
 #include "coreDependencies/FCFSScheduler.h"
 #include "coreDependencies/RRScheduler.h"
+#include "coreDependencies/CommandGenerator.h"
+#include "coreDependencies/ProcessGenerator.h"
 #include <iostream>
 #include <algorithm>
 #include <iomanip>
@@ -106,8 +108,20 @@ void CommandProcessor::handleScreen_s(const std::string& processName) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<uint32_t> dist(config.minIns, config.maxIns);
+    
+    // 1. Determine how many lines of code this process should have
+    uint32_t targetInstructions = dist(gen);
 
-    auto newProc = std::make_shared<Process>(nextPID++, processName, dist(gen));
+    // 2. Create the empty process
+    // (Note: If your Process constructor requires a 3rd argument for total lines, add it back!)
+    auto newProc = std::make_shared<Process>(nextPID++, processName);
+    
+    // 3. Generate the advanced AST program and inject it into the process
+    std::vector<std::shared_ptr<ICommand>> generatedProgram = CommandGenerator::generateProgram(targetInstructions);
+    for(const auto& cmd : generatedProgram) {
+        newProc->addCommand(cmd);
+    }
+
     processMap[processName] = newProc;
     
     if (activeScheduler) activeScheduler->addProcess(newProc);
@@ -270,9 +284,35 @@ void CommandProcessor::handleReportUtil() {
     std::cout << "\n  [report-util] Report saved to 'csopesy-log.txt'.\n";
 }
 
-void CommandProcessor::handleScreen_r()    { std::cout << "\n  [screen_r] command recognized.\n"; }
-void CommandProcessor::handleSchedulerStart() { std::cout << "\n  [scheduler-start] command recognized.\n"; }
-void CommandProcessor::handleSchedulerStop()  { std::cout << "\n  [scheduler-stop] command recognized.\n"; }
+void CommandProcessor::handleScreen_r() { 
+    std::cout << "\n  [screen_r] command recognized.\n"; 
+}
+
+void CommandProcessor::handleSchedulerStart() {
+    if (!isInitialized) {
+        std::cout << "\n  Command recognized, but you must run 'initialize' first!\n";
+    } 
+    else if (generator != nullptr) {
+        std::cout << "\n  Scheduler is already running!\n";
+    }
+    else {
+        // Create the generator and start its background thread
+        generator = std::make_shared<ProcessGenerator>(activeScheduler, configManager.getConfig());
+        generator->start();
+        std::cout << "\n  Scheduler started. Generating processes in the background...\n\n";
+    }
+}
+
+void CommandProcessor::handleSchedulerStop() {
+    if (generator != nullptr) {
+        generator->stop(); // Safely kill the background thread
+        generator = nullptr; // Clear it from memory
+        std::cout << "\n  Scheduler stopped. No new processes will be generated.\n\n";
+    } else {
+        std::cout << "\n  Scheduler is not currently running.\n\n";
+    }
+}
+
 void CommandProcessor::handleHelp() {
     std::cout << "\n  Available commands: initialize, screen -s <name>, screen -ls, scheduler-start, scheduler-stop, report-util, exit\n";
 }
@@ -283,13 +323,23 @@ void CommandProcessor::handleInitialize() {
         return;
     }
 
+    std::cout << "\n  [initialize] Reading configuration from 'config.txt'...\n";
+    
+    
+    if (!configManager.loadConfig("config.txt")) {
+        std::cerr << "  Error: Could not open or parse 'config.txt'.\n\n";
+        return;
+    }
+
     const Config& config = configManager.getConfig();
+    
+   
     if (config.scheduler == "fcfs") {
-        activeScheduler = std::make_unique<FCFSScheduler>(config.numCpu, config.delayPerExec);
+        activeScheduler = std::make_shared<FCFSScheduler>(config.numCpu, config.delayPerExec);
         isInitialized = true;
         std::cout << "  [System] FCFS Scheduler successfully allocated and staged.\n";
     } else if (config.scheduler == "rr") {
-        activeScheduler = std::make_unique<RRScheduler>(config.quantumCycles, config.numCpu, config.delayPerExec);
+        activeScheduler = std::make_shared<RRScheduler>(config.quantumCycles, config.numCpu, config.delayPerExec);
         isInitialized = true;
         std::cout << "  [System] Round Robin Scheduler successfully allocated and staged.\n";
     }

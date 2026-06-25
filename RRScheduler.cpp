@@ -82,15 +82,30 @@ void RRScheduler::run() {
             if (cores[i] && !cores[i]->isFinished()) {
                 coreActivityThisCycle = true;
                 
-                std::cout << "  -> [Core " << i << "][PID " << cores[i]->getPID() << "] Executing Line " 
-                          << (coreQuantumCounters[i] + 1) << "/" << quantumLimit << "\n";
-                
-                // Fire the script logic line
-                cores[i]->executeCurrentCommand();
-                cores[i]->moveToNextLine();
-                
-                // Advance this specific core's quantum usage record
-                coreQuantumCounters[i]++;
+                // Check if the process is currently supposed to be sleeping
+                if (cores[i]->getState() == Process::WAITING) {
+                    
+                    cores[i]->decrementSleepTicks(); // Tick down remaining sleep time
+                    
+                    // If it's done sleeping, wake it back up for the next cycle
+                    if (cores[i]->getSleepTicksRemaining() <= 0) {
+                        cores[i]->setState(Process::RUNNING);
+                    }
+                    
+                    // Note: In RR, sleeping still uses up your time slice!
+                    coreQuantumCounters[i]++; 
+                    
+                } else {
+                    // Process is awake! Execute its current command normally
+                    std::cout << "  -> [Core " << i << "][PID " << cores[i]->getPID() << "] Executing Line " 
+                              << (coreQuantumCounters[i] + 1) << "/" << quantumLimit << "\n";
+                    
+                    cores[i]->executeCurrentCommand();
+                    cores[i]->moveToNextLine();
+                    
+                    // Advance this specific core's quantum usage record
+                    coreQuantumCounters[i]++;
+                }
             }
         }
 
