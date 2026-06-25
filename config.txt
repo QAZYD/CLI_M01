@@ -11,7 +11,7 @@ batch-process-freq 1
 //The minimum instructions/command per process. The range is [1, 2^32].
 min-ins 10
 //The maximum instructions/command per process. The range is [1, 2^32].
-max-ins 500
+max-ins 10
 //Delay before executing the next instruction in CPU cycles. The delay is a “busy-waiting” 
 //scheme wherein the process remains in the CPU. The range is [0, 232] If zero, 
 //each instruction is executed per CPU cycle.

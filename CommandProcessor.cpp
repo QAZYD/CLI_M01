@@ -85,6 +85,22 @@ bool CommandProcessor::execute(const std::string& input) {
 // HANDLER IMPLEMENTATIONS
 // =========================================================================
 
+void CommandProcessor::printProcessScreenHeader(const std::shared_ptr<Process>& process) {
+    if (!process) return;
+
+    std::cout << "process name: " << process->getName() << "\n";
+    std::cout << "ID: " << process->getPID() << "\n";
+    std::cout << "Logs:\n";
+
+    int assignedCore = process->getAssignedCore();
+    std::cout << "(" << process->getStartedAtString() << ") Core "
+              << (assignedCore >= 0 ? std::to_string(assignedCore) : "Waiting")
+              << "\n";
+
+    std::cout << "\nCurrent instruction line: " << process->getCurrentInstructionLine() << "\n";
+    std::cout << "lines of code: " << process->getTotalLines() << "\n";
+}
+
 void CommandProcessor::handleScreen_s(const std::string& processName) {
     if (!isInitialized) {
         std::cout << "  Error: System must be initialized before creating a process.\n";
@@ -96,7 +112,8 @@ void CommandProcessor::handleScreen_s(const std::string& processName) {
     if (it != processMap.end()) {
         currentAttachedProcess = it->second;
         clearScreen();
-        std::cout << "  [Switched to Existing Process Screen: " << processName << "]\n";
+        std::cout << "[Re-entered Process Screen: " << processName << "]\n";
+        printProcessScreenHeader(currentAttachedProcess);
         return;
     }
 
@@ -121,25 +138,33 @@ void CommandProcessor::handleScreen_s(const std::string& processName) {
     // Change current terminal target context and draw screen UI
     currentAttachedProcess = newProc;
     clearScreen();
-    std::cout << "  [Created & Switched to Process Screen: " << processName << "]\n";
+    printProcessScreenHeader(currentAttachedProcess);
 }
 
 void CommandProcessor::handleProcessSMI() {
     if (!currentAttachedProcess) return;
 
     std::cout << "\n================ PROCESS INFO ================\n";
-    std::cout << "  Process Name : " << currentAttachedProcess->getName() << "\n";
-    std::cout << "  ID (PID)     : " << currentAttachedProcess->getPID() << "\n";
+    std::cout << "  Process Name       : " << currentAttachedProcess->getName() << "\n";
+    std::cout << "  ID (PID)           : " << currentAttachedProcess->getPID() << "\n";
+    std::cout << "  Started At         : " << currentAttachedProcess->getStartedAtString() << "\n";
+
+    int assignedCore = currentAttachedProcess->getAssignedCore();
+    std::cout << "  Assigned Core      : "
+              << (assignedCore >= 0 ? std::to_string(assignedCore) : "Waiting")
+              << "\n";
+    std::cout << "  Current Instruction: " << currentAttachedProcess->getCurrentInstructionLine() << "\n";
+    std::cout << "  Lines in Current Block: " << currentAttachedProcess->getCurrentFrameInstructionCount() << "\n";
     
     // Status / Finish check
     if (currentAttachedProcess->isFinished()) {
-        std::cout << "  Status       : Finished!\n";
+        std::cout << "  Status             : Finished!\n";
     } else {
-        std::cout << "  Status       : Running / Staged\n";
+        std::cout << "  Status             : Running / Staged\n";
     }
 
     // Print progress and log history metric values 
-    std::cout << "  Progress     : " << currentAttachedProcess->getLinesExecuted() 
+    std::cout << "  Progress           : " << currentAttachedProcess->getLinesExecuted() 
               << " / " << currentAttachedProcess->getTotalLines() << " instructions.\n";
     std::cout << "--------------------- LOGS ---------------------\n";
     

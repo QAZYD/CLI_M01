@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <chrono>
 #include "SymbolTable.h"
 #include "ICommand.h"
 
@@ -38,6 +39,11 @@ public:
     int getTotalLines() const;
     void printExecutionLogs() const;
     int getSleepTicksRemaining() const { return sleepTicksRemaining; }
+    std::string getStartedAtString() const;
+    int getAssignedCore() const;
+    void setAssignedCore(int core);
+    int getCurrentInstructionLine() const;
+    int getCurrentFrameInstructionCount() const;
     void setState(ProcessState State);
     SymbolTable& getSymbolTable();
 
@@ -61,4 +67,6 @@ private:
     // New tracking variables for diagnostic readouts
     int linesExecuted;
     std::vector<std::string> logs;
+    std::chrono::system_clock::time_point startedAt;
+    int assignedCore;
 };

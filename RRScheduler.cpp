@@ -38,6 +38,7 @@ void RRScheduler::run() {
             if (cores[i] && cores[i]->isFinished()) {
                 std::cout << "[RR] [Core " << i << "] Process " << cores[i]->getName() 
                           << " [PID: " << cores[i]->getPID() << "] completed execution naturally.\n";
+                cores[i]->setAssignedCore(-1);
                 cores[i] = nullptr;
             }
             
@@ -50,6 +51,7 @@ void RRScheduler::run() {
                 {
                     std::lock_guard<std::mutex> lock(queueMutex);
                     cores[i]->setState(Process::READY);
+                    cores[i]->setAssignedCore(-1);
                     readyQueue.push(cores[i]);
                 }
                 cores[i] = nullptr; // Free up the core slot
@@ -63,6 +65,7 @@ void RRScheduler::run() {
                     readyQueue.pop();
                     
                     cores[i]->setState(Process::RUNNING);
+                    cores[i]->setAssignedCore(i);
                     coreQuantumCounters[i] = 0; // Reset the quantum usage clock for this core slot
                     
                     std::cout << "[RR] [Core " << i << "] Dispatching Process: " 

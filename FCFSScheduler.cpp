@@ -34,6 +34,7 @@ void FCFSScheduler::run() {
             if (cores[i] && cores[i]->isFinished()) {
                 std::cout << "[FCFS] [Core " << i << "] Process " << cores[i]->getName() 
                           << " [PID: " << cores[i]->getPID() << "] completed execution.\n";
+                cores[i]->setAssignedCore(-1);
                 cores[i] = nullptr;
             }
 
@@ -44,6 +45,7 @@ void FCFSScheduler::run() {
                     cores[i] = readyQueue.front();
                     readyQueue.pop();
                     cores[i]->setState(Process::RUNNING);
+                    cores[i]->setAssignedCore(i);
                     
                     std::cout << "[FCFS] [Core " << i << "] Dispatching Process: " 
                               << cores[i]->getName() << " [PID: " << cores[i]->getPID() << "]\n";
