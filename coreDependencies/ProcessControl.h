@@ -40,6 +40,7 @@ public:
     void printExecutionLogs() const;
     int getSleepTicksRemaining() const { return sleepTicksRemaining; }
     std::string getStartedAtString() const;
+    std::string getLastUpdatedString() const;
     int getAssignedCore() const;
     void setAssignedCore(int core);
     int getCurrentInstructionLine() const;
@@ -51,6 +52,7 @@ public:
     void pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats);
     void sleep(int ticks);
     void decrementSleepTicks();
+    void touch();
 
 private:
     int pid;
@@ -71,5 +73,6 @@ private:
     int linesExecuted;
     std::vector<std::string> logs;
     std::chrono::system_clock::time_point startedAt;
+    std::chrono::system_clock::time_point lastUpdatedAt;
     int assignedCore;
 };

@@ -103,11 +103,9 @@ std::shared_ptr<ICommand> generateRandomCommand(std::mt19937& gen, int currentDe
     }
 }
 Process::Process(int pid, std::string name, int totalLines)
-    : pid(pid), name(name), currentState(READY), isStackInitialized(false), 
-      sleepTicksRemaining(0), linesExecuted(0), startedAt(std::chrono::system_clock::now()), assignedCore(-1) 
     : pid(pid), name(name), currentState(READY), isStackInitialized(false),
-      sleepTicksRemaining(0), linesExecuted(0),
-      totalInstructions(totalLines)
+      sleepTicksRemaining(0), linesExecuted(0), startedAt(std::chrono::system_clock::now()),
+      lastUpdatedAt(std::chrono::system_clock::now()), assignedCore(-1), totalInstructions(totalLines)
 {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -129,6 +127,7 @@ Process::Process(int pid, std::string name, int totalLines)
 
 void Process::addCommand(std::shared_ptr<ICommand> command) {
     commandList.push_back(command);
+    touch();
 }
 
 void Process::executeCurrentCommand() {
@@ -165,6 +164,7 @@ void Process::executeCurrentCommand() {
         // Increment executed lines counter and log
         linesExecuted++;
         logs.push_back("Executed command line index: " + std::to_string(currentFrame.pc));
+        touch();
 
         // INTERCEPTION LAYER
         if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
@@ -181,6 +181,7 @@ void Process::executeCurrentCommand() {
     }
 }
 void Process::moveToNextLine() {
+    touch();
     if (executionStack.empty()) {
         currentState = FINISHED;
         return;
@@ -216,7 +217,7 @@ bool Process::isFinished() const {
 int Process::getPID() const { return pid; }
 Process::ProcessState Process::getState() const { return currentState; }
 std::string Process::getName() const { return name; }
-void Process::setState(ProcessState State) { currentState = State; }
+void Process::setState(ProcessState State) { currentState = State; touch(); }
 SymbolTable& Process::getSymbolTable() { return symbolTable; }
 
 // =========================================================
@@ -245,12 +246,31 @@ std::string Process::getStartedAtString() const {
     return stream.str();
 }
 
+std::string Process::getLastUpdatedString() const {
+    std::time_t timeValue = std::chrono::system_clock::to_time_t(lastUpdatedAt);
+    std::tm localTime{};
+#if defined(_WIN32)
+    localtime_s(&localTime, &timeValue);
+#else
+    localtime_r(&timeValue, &localTime);
+#endif
+
+    std::ostringstream stream;
+    stream << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
+    return stream.str();
+}
+
+void Process::touch() {
+    lastUpdatedAt = std::chrono::system_clock::now();
+}
+
 int Process::getAssignedCore() const {
     return assignedCore;
 }
 
 void Process::setAssignedCore(int core) {
     assignedCore = core;
+    touch();
 }
 
 int Process::getCurrentInstructionLine() const {
@@ -297,11 +317,13 @@ void Process::pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instru
     // pc is initialized to -1 because moveToNextLine() runs right after execute,
     // which increments it back up to 0 for the subsequent cycle tick.
     executionStack.push_back({instructions, -1, repeats});
+    touch();
 }
 
 void Process::sleep(int ticks) {
     sleepTicksRemaining = ticks;
     currentState = WAITING; 
+    touch();
 }
 
 void Process::decrementSleepTicks() {

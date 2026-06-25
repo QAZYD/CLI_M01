@@ -3,11 +3,14 @@
 #include "coreDependencies/RRScheduler.h"
 #include <iostream>
 #include <algorithm>
+#include <iomanip>
 #include <random>
+#include <fstream>
 
 CommandProcessor::CommandProcessor() {
     commandMap["initialize"]      = &CommandProcessor::handleInitialize;
     commandMap["screen_ls"]       = &CommandProcessor::handleScreen_ls;
+    commandMap["screen-ls"]       = &CommandProcessor::handleScreen_ls;
     commandMap["screen_r"]        = &CommandProcessor::handleScreen_r;
     commandMap["scheduler-start"] = &CommandProcessor::handleSchedulerStart;
     commandMap["scheduler-stop"]  = &CommandProcessor::handleSchedulerStop;
@@ -66,6 +69,11 @@ bool CommandProcessor::execute(const std::string& input) {
         } else {
             handleScreen_s(procName);
         }
+        return true;
+    }
+
+    if (trimmed == "screen -ls" || trimmed == "screen-ls" || trimmed == "screen_ls") {
+        handleScreen_ls();
         return true;
     }
 
@@ -206,11 +214,142 @@ void CommandProcessor::handleInitialize() {
     }
 }
 
-void CommandProcessor::handleScreen_ls()   { std::cout << "\n  [screen_ls] command recognized.\n"; }
+void CommandProcessor::handleScreen_ls() {
+    if (!isInitialized) {
+        std::cout << "  Error: System must be initialized before listing process screens.\n";
+        return;
+    }
+
+    const Config& config = configManager.getConfig();
+    int totalCores = config.numCpu;
+    int usedCores = 0;
+    int runningProcesses = 0;
+    int finishedProcesses = 0;
+
+    for (const auto& entry : processMap) {
+        const auto& process = entry.second;
+        if (process && process->getAssignedCore() >= 0) {
+            ++usedCores;
+        }
+        if (process && process->isFinished()) {
+            ++finishedProcesses;
+        } else {
+            ++runningProcesses;
+        }
+    }
+
+    double cpuUtilization = totalCores > 0 ? (100.0 * usedCores / totalCores) : 0.0;
+
+    std::cout << "\n  [screen-ls] Process Screens\n";
+    std::cout << "  CPU Utilization : " << std::fixed << std::setprecision(1) << cpuUtilization
+              << "% (" << usedCores << "/" << totalCores << " cores used)\n";
+    std::cout << "  Cores Used      : " << usedCores << "\n";
+    std::cout << "  Cores Available : " << (totalCores - usedCores) << "\n";
+    std::cout << "  Running Processes: " << runningProcesses << "\n";
+    std::cout << "  Finished Processes: " << finishedProcesses << "\n";
+    std::cout << "  ----------------------------------------\n";
+
+    if (processMap.empty()) {
+        std::cout << "  (No process screens have been created yet.)\n";
+        return;
+    }
+
+    std::cout << "  PID | Name           | State      | Core | Last Updated\n";
+    for (const auto& entry : processMap) {
+        const auto& process = entry.second;
+        if (!process) continue;
+
+        std::string state = "READY";
+        switch (process->getState()) {
+            case Process::RUNNING: state = "RUNNING"; break;
+            case Process::WAITING: state = "WAITING"; break;
+            case Process::FINISHED: state = "FINISHED"; break;
+            default: state = "READY"; break;
+        }
+
+        std::cout << "  " << process->getPID()
+                  << " | " << std::setw(15) << std::left << process->getName() << std::right
+                  << " | " << std::setw(10) << state
+                  << " | " << std::setw(4) << (process->getAssignedCore() >= 0 ? std::to_string(process->getAssignedCore()) : "-")
+                  << " | " << process->getLastUpdatedString() << "\n";
+    }
+}
+
+void CommandProcessor::handleReportUtil() {
+    if (!isInitialized) {
+        std::cout << "  Error: System must be initialized before generating a report.\n";
+        return;
+    }
+
+    const Config& config = configManager.getConfig();
+    int totalCores = config.numCpu;
+    int usedCores = 0;
+    int runningProcesses = 0;
+    int finishedProcesses = 0;
+
+    for (const auto& entry : processMap) {
+        const auto& process = entry.second;
+        if (process && process->getAssignedCore() >= 0) {
+            ++usedCores;
+        }
+        if (process && process->isFinished()) {
+            ++finishedProcesses;
+        } else {
+            ++runningProcesses;
+        }
+    }
+
+    double cpuUtilization = totalCores > 0 ? (100.0 * usedCores / totalCores) : 0.0;
+
+    std::ofstream logFile("csopesy-log.txt", std::ios::app);
+    if (!logFile.is_open()) {
+        std::cout << "  Error: Could not open or create 'csopesy-log.txt'.\n";
+        return;
+    }
+
+    logFile << "CSOPESY Process Report\n";
+    logFile << "==============================================\n";
+    logFile << "CPU Utilization : " << std::fixed << std::setprecision(1) << cpuUtilization
+            << "% (" << usedCores << "/" << totalCores << " cores used)\n";
+    logFile << "Cores Used      : " << usedCores << "\n";
+    logFile << "Cores Available : " << (totalCores - usedCores) << "\n";
+    logFile << "Running Processes: " << runningProcesses << "\n";
+    logFile << "Finished Processes: " << finishedProcesses << "\n";
+    logFile << "----------------------------------------------\n";
+
+    if (processMap.empty()) {
+        logFile << "(No process screens have been created yet.)\n";
+    } else {
+        logFile << "PID | Name           | State      | Core | Last Updated\n";
+        for (const auto& entry : processMap) {
+            const auto& process = entry.second;
+            if (!process) continue;
+
+            std::string state = "READY";
+            switch (process->getState()) {
+                case Process::RUNNING:  state = "RUNNING";  break;
+                case Process::WAITING:  state = "WAITING";  break;
+                case Process::FINISHED: state = "FINISHED"; break;
+                default:                state = "READY";    break;
+            }
+
+            logFile << process->getPID()
+                    << " | " << std::setw(15) << std::left << process->getName() << std::right
+                    << " | " << std::setw(10) << state
+                    << " | " << std::setw(4) << (process->getAssignedCore() >= 0 ? std::to_string(process->getAssignedCore()) : "-")
+                    << " | " << process->getLastUpdatedString() << "\n";
+        }
+    }
+
+    logFile << "==============================================\n";
+    logFile.close();
+
+    std::cout << "\n  [report-util] Report saved to 'csopesy-log.txt'.\n";
+}
+
 void CommandProcessor::handleScreen_r()    { std::cout << "\n  [screen_r] command recognized.\n"; }
 void CommandProcessor::handleSchedulerStart() { std::cout << "\n  [scheduler-start] command recognized.\n"; }
 void CommandProcessor::handleSchedulerStop()  { std::cout << "\n  [scheduler-stop] command recognized.\n"; }
-void CommandProcessor::handleReportUtil()  { std::cout << "\n  [report-util] command recognized.\n"; }
 void CommandProcessor::handleHelp() {
-    std::cout << "\n  Available commands: initialize, screen -s <name>, scheduler-start, scheduler-stop, report-util, exit\n";
+    std::cout << "\n  Available commands: initialize, screen -s <name>, screen -ls, scheduler-start, scheduler-stop, report-util, exit\n";
 }

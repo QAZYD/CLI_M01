@@ -1,0 +1,11 @@
+CSOPESY Process Report
+==============================================
+CPU Utilization : 0.0% (0/4 cores used)
+Cores Used      : 0
+Cores Available : 4
+Running Processes: 0
+Finished Processes: 1
+----------------------------------------------
+PID | Name           | State      | Core | Last Updated
+1 | screen1         |   FINISHED |    - | 2026-06-26 00:38:09
+==============================================
