@@ -9,7 +9,10 @@
 #include "ICommandChildren/PrintCommand.h"
 
 #include <iostream>
+#include <iomanip>
 #include <random>
+#include <sstream>
+#include <ctime>
 
 // Simple placeholder class to fill up dummy execution processes safely
 class DummyCommand : public ICommand {
@@ -100,6 +103,8 @@ std::shared_ptr<ICommand> generateRandomCommand(std::mt19937& gen, int currentDe
     }
 }
 Process::Process(int pid, std::string name, int totalLines)
+    : pid(pid), name(name), currentState(READY), isStackInitialized(false), 
+      sleepTicksRemaining(0), linesExecuted(0), startedAt(std::chrono::system_clock::now()), assignedCore(-1) 
     : pid(pid), name(name), currentState(READY), isStackInitialized(false),
       sleepTicksRemaining(0), linesExecuted(0),
       totalInstructions(totalLines)
@@ -224,6 +229,54 @@ int Process::getLinesExecuted() const {
 
 int Process::getTotalLines() const {
     return totalInstructions;
+}
+
+std::string Process::getStartedAtString() const {
+    std::time_t timeValue = std::chrono::system_clock::to_time_t(startedAt);
+    std::tm localTime{};
+#if defined(_WIN32)
+    localtime_s(&localTime, &timeValue);
+#else
+    localtime_r(&timeValue, &localTime);
+#endif
+
+    std::ostringstream stream;
+    stream << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
+    return stream.str();
+}
+
+int Process::getAssignedCore() const {
+    return assignedCore;
+}
+
+void Process::setAssignedCore(int core) {
+    assignedCore = core;
+}
+
+int Process::getCurrentInstructionLine() const {
+    if (!isStackInitialized && !commandList.empty()) {
+        return 1;
+    }
+
+    if (executionStack.empty()) {
+        return 0;
+    }
+
+    const auto& currentFrame = executionStack.back();
+    if (currentFrame.pc < 0 || currentFrame.pc >= static_cast<int>(currentFrame.instructions.size())) {
+        return 0;
+    }
+
+    return currentFrame.pc + 1;
+}
+
+int Process::getCurrentFrameInstructionCount() const {
+    if (!isStackInitialized || executionStack.empty()) {
+        return static_cast<int>(commandList.size());
+    }
+
+    const auto& currentFrame = executionStack.back();
+    return static_cast<int>(currentFrame.instructions.size());
 }
 
 void Process::printExecutionLogs() const {

@@ -41,4 +41,5 @@ private:
     
     // Process Screen Specific Handlers
     void handleProcessSMI();
+    void printProcessScreenHeader(const std::shared_ptr<Process>& process);
 };
