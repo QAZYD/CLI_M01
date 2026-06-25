@@ -22,52 +22,82 @@ public:
     }
 };
 
-std::shared_ptr<ICommand> generateRandomCommand(std::mt19937& gen, int currentDepth) {
-    std::uniform_int_distribution<int> typeDist(0, 2);   // 0: Action, 1: Sleep, 2: For Loop
-    std::uniform_int_distribution<int> actionDist(0, 3); // 0: Declare, 1: Add, 2: Subtract, 3: Print
-
+std::shared_ptr<ICommand> generateRandomCommand(std::mt19937& gen, int currentDepth, int& remainingInstructions, int& generatedInstructions) {
+    std::uniform_int_distribution<int> typeDist(0, 5);  
     std::uniform_int_distribution<int> tickDist(1, 10);  
-    std::uniform_int_distribution<int> repeatDist(2, 4); 
+    std::uniform_int_distribution<int> repeatDist(2, 4);
     std::uniform_int_distribution<int> sizeDist(2, 3);   
 
     int choice = typeDist(gen);
 
     // Enforce the max loop nesting rule (up to 3 times)
-    if (choice == 2 && currentDepth >= 3) {
-        choice = typeDist(gen) % 2; 
+    if (choice == 0 && currentDepth >= 3) {
+    std::uniform_int_distribution<int> nonLoopDist(1, 5);
+    choice = nonLoopDist(gen);
     }
 
     if (choice == 1) {
+        remainingInstructions--;
+        generatedInstructions++;
+
         uint8_t randomTicks = static_cast<uint8_t>(tickDist(gen));
         return std::make_shared<SleepCommand>(randomTicks);
     } 
-    else if (choice == 2) {
-        int bodySize = sizeDist(gen);
-        std::vector<std::shared_ptr<ICommand>> loopBody;
-        
-        for (int i = 0; i < bodySize; ++i) {
-            loopBody.push_back(generateRandomCommand(gen, currentDepth + 1));
-        }
-        return std::make_shared<ForCommand>(loopBody, repeatDist(gen));
-    } 
+    else if (choice == 0) {
+    remainingInstructions--;  // FOR counts as one
+    generatedInstructions++;
+
+
+    int bodySize = std::min(
+        sizeDist(gen),
+        remainingInstructions
+    );
+
+    std::vector<std::shared_ptr<ICommand>> loopBody;
+
+    for (int i = 0; i < bodySize; ++i) {
+        loopBody.push_back(
+            generateRandomCommand(
+                gen,
+                currentDepth + 1,
+                remainingInstructions,
+                generatedInstructions
+            )
+        );
+    }
+
+    return std::make_shared<ForCommand>(
+        loopBody,
+        repeatDist(gen)
+    );
+    }
+     
     else {
-        int actionChoice = actionDist(gen);
+        int actionChoice = choice;
         switch (actionChoice) {
-            case 0: 
+            case 2: 
                 // Double check your DeclareCommand constructor parameters too!
+                remainingInstructions--;
+                generatedInstructions++; 
                 return std::make_shared<DeclareCommand>("mockVar", 0); 
             
-            case 1: 
+            case 3: 
                 // FIXED: Passes 3 strings to match (dest, op1, op2) -> e.g., mockVar = mockVar + 1
+                remainingInstructions--;
+                generatedInstructions++; 
                 return std::make_shared<AddCommand>("mockVar", "mockVar", "1");
             
-            case 2: 
+            case 4: 
                 // FIXED: Passes 3 strings to match (dest, op1, op2) -> e.g., mockVar = mockVar - 1
+                remainingInstructions--;
+                generatedInstructions++; 
                 return std::make_shared<SubtractCommand>("mockVar", "mockVar", "1");
             
-            case 3: 
+            case 5: 
             default:
                 // Double check your PrintCommand constructor parameters too!
+                remainingInstructions--;
+                generatedInstructions++; 
                 return std::make_shared<PrintCommand>("mockVar");
         }
     }
@@ -75,14 +105,26 @@ std::shared_ptr<ICommand> generateRandomCommand(std::mt19937& gen, int currentDe
 Process::Process(int pid, std::string name, int totalLines)
     : pid(pid), name(name), currentState(READY), isStackInitialized(false), 
       sleepTicksRemaining(0), linesExecuted(0), startedAt(std::chrono::system_clock::now()), assignedCore(-1) 
+    : pid(pid), name(name), currentState(READY), isStackInitialized(false),
+      sleepTicksRemaining(0), linesExecuted(0),
+      totalInstructions(totalLines)
 {
     std::random_device rd;
     std::mt19937 gen(rd());
-
+    int remainingInstructions = totalLines;
+    int generatedInstructions = 0;
     // Generate randomized instruction lines for the root script layout
-    for (int i = 0; i < totalLines; ++i) {
-        addCommand(generateRandomCommand(gen, 1)); // Top-level starts at Depth 1
-    }
+    while (generatedInstructions < remainingInstructions)
+{
+    addCommand(
+        generateRandomCommand(
+            gen,
+            1,
+            remainingInstructions,
+            generatedInstructions
+        )
+    );
+}
 }
 
 void Process::addCommand(std::shared_ptr<ICommand> command) {
@@ -90,7 +132,7 @@ void Process::addCommand(std::shared_ptr<ICommand> command) {
 }
 
 void Process::executeCurrentCommand() {
-    // Lazy-initialize the call stack with our main command list on first execution
+    // 1. Lazy-initialize the call stack
     if (!isStackInitialized) {
         if (!commandList.empty()) {
             executionStack.push_back({commandList, 0, 1});
@@ -98,12 +140,20 @@ void Process::executeCurrentCommand() {
         isStackInitialized = true;
     }
 
+    // --- ADDED LIMIT CHECK ---
+    // Stop immediately if we have reached or exceeded the totalLines budget
+    if (linesExecuted >= totalInstructions) {
+        currentState = FINISHED;
+        return;
+    }
+    // -------------------------
+
     if (executionStack.empty()) {
         currentState = FINISHED;
         return;
     }
 
-    // Transition from READY to RUNNING when matched with a CPU core
+    // Transition from READY to RUNNING
     if (currentState == READY) {
         currentState = RUNNING;
     }
@@ -112,11 +162,11 @@ void Process::executeCurrentCommand() {
     if (currentFrame.pc >= 0 && currentFrame.pc < static_cast<int>(currentFrame.instructions.size())) {
         auto currentCmd = currentFrame.instructions[currentFrame.pc];
 
-        // Increment executed lines counter and log this cycle activity step
+        // Increment executed lines counter and log
         linesExecuted++;
         logs.push_back("Executed command line index: " + std::to_string(currentFrame.pc));
 
-        // INTERCEPTION LAYER: Check if command is a control-flow wrapper
+        // INTERCEPTION LAYER
         if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
             this->sleep(sleepCmd->getTicks());
         } 
@@ -124,14 +174,12 @@ void Process::executeCurrentCommand() {
             this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
         } 
         else {
-            // Standard commands (SET, PRINT, ASSIGN) execute normally via your old system
             currentCmd->execute(symbolTable);
         }
     } else {
         currentState = FINISHED;
     }
 }
-
 void Process::moveToNextLine() {
     if (executionStack.empty()) {
         currentState = FINISHED;
@@ -179,8 +227,8 @@ int Process::getLinesExecuted() const {
     return linesExecuted; 
 }
 
-int Process::getTotalLines() const { 
-    return static_cast<int>(commandList.size()); 
+int Process::getTotalLines() const {
+    return totalInstructions;
 }
 
 std::string Process::getStartedAtString() const {
