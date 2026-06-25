@@ -136,13 +136,6 @@ void CommandProcessor::handleProcessSMI() {
     std::cout << "================================================\n\n";
 }
 
-void CommandProcessor::handleInitialize() {
-    std::cout << "\n  [initialize] Reading configuration from 'config.txt'...\n";
-    
-    if (!configManager.loadConfig("config.txt")) {
-        std::cerr << "  Error: Could not open or parse 'config.txt'.\n\n";
-        return;
-    }
 
 void CommandProcessor::handleScreen_ls() {
     if (!isInitialized) {

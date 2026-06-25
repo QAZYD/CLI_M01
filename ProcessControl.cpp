@@ -1,108 +1,33 @@
-    #include "coreDependencies/ProcessControl.h" 
-    #include "CommandGenerator.h" // Handles our decoupled program generation
-    #include "ICommandChildren/SleepCommand.h" // Kept for dynamic pointer checking
-    #include "ICommandChildren/ForCommand.h"   // Kept for dynamic pointer checking
+#include "coreDependencies/ProcessControl.h" 
+#include "CommandGenerator.h"              // Handles our decoupled program generation
+#include "ICommandChildren/SleepCommand.h" // Kept for dynamic pointer checking
+#include "ICommandChildren/ForCommand.h"   // Kept for dynamic pointer checking
 
-    #include <iostream>
-    #include <iomanip>
-    #include <sstream>
-    #include <ctime>
-    #include <chrono>
-    #include <algorithm>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <ctime>
+#include <chrono>
+#include <algorithm>
 
-    // =========================================================
-    // LIFECYCLE & CORE EXECUTION
-    // =========================================================
+// =========================================================
+// LIFECYCLE & CORE EXECUTION
+// =========================================================
 
-    Process::Process(int pid, std::string name, int totalLines)
-        : pid(pid), name(name), currentState(READY), isStackInitialized(false), 
-        sleepTicksRemaining(0), linesExecuted(0), startedAt(std::chrono::system_clock::now()), 
-        assignedCore(-1), totalInstructions(totalLines)
-    {
-        // Delegate the random layout construction to our specialized generator
-        commandList = CommandGenerator::generateProgram(totalLines);
-    }
-
-    void Process::addCommand(std::shared_ptr<ICommand> command) {
-        commandList.push_back(command);
-    }
-
-    void Process::executeCurrentCommand() {
-        // 1. Lazy-initialize the call stack
-        if (!isStackInitialized) {
-            if (!commandList.empty()) {
-                executionStack.push_back({commandList, 0, 1});
-            }
-            isStackInitialized = true;
-        }
-
-        // Stop immediately if we have reached or exceeded the totalLines budget
-        if (linesExecuted >= totalInstructions) {
-            currentState = FINISHED;
-            return;
-        }
-
-        if (executionStack.empty()) {
-            currentState = FINISHED;
-            return;
-        }
-
-        // Transition from READY to RUNNING
-        if (currentState == READY) {
-            currentState = RUNNING;
-        }
-
-        auto& currentFrame = executionStack.back();
-        if (currentFrame.pc >= 0 && currentFrame.pc < static_cast<int>(currentFrame.instructions.size())) {
-            auto currentCmd = currentFrame.instructions[currentFrame.pc];
-
-            // Increment executed lines counter and log
-            linesExecuted++;
-            logs.push_back("Executed command line index: " + std::to_string(currentFrame.pc));
-
-            // INTERCEPTION LAYER
-            if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
-                this->sleep(sleepCmd->getTicks());
-            } 
-            else if (auto forCmd = std::dynamic_pointer_cast<ForCommand>(currentCmd)) {
-                this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
-            } 
-            else {
-                currentCmd->execute(symbolTable);
-            }
-        } else {
-            currentState = FINISHED;
-        }
-    }
-
-    void Process::moveToNextLine() {
-        if (executionStack.empty()) {
-            currentState = FINISHED;
-            return;
-        }
-    }
-}
 Process::Process(int pid, std::string name, int totalLines)
-    : pid(pid), name(name), currentState(READY), isStackInitialized(false),
-      sleepTicksRemaining(0), linesExecuted(0), startedAt(std::chrono::system_clock::now()),
-      lastUpdatedAt(std::chrono::system_clock::now()), assignedCore(-1), totalInstructions(totalLines)
+    : pid(pid), 
+      name(name), 
+      currentState(READY), 
+      isStackInitialized(false), 
+      sleepTicksRemaining(0), 
+      linesExecuted(0), 
+      startedAt(std::chrono::system_clock::now()), 
+      lastUpdatedAt(std::chrono::system_clock::now()),
+      assignedCore(-1), 
+      totalInstructions(totalLines)
 {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    int remainingInstructions = totalLines;
-    int generatedInstructions = 0;
-    // Generate randomized instruction lines for the root script layout
-    while (generatedInstructions < remainingInstructions)
-{
-    addCommand(
-        generateRandomCommand(
-            gen,
-            1,
-            remainingInstructions,
-            generatedInstructions
-        )
-    );
-}
+    // Delegate the random layout construction entirely to our specialized generator
+    commandList = CommandGenerator::generateProgram(totalLines);
 }
 
 void Process::addCommand(std::shared_ptr<ICommand> command) {
@@ -110,45 +35,29 @@ void Process::addCommand(std::shared_ptr<ICommand> command) {
     touch();
 }
 
-        // Advance the program counter for the top frame
-        executionStack.back().pc++;
-
-        // Evaluate and unwind finished frames
-        while (!executionStack.empty() && executionStack.back().pc >= static_cast<int>(executionStack.back().instructions.size())) {
-            executionStack.back().repeatsLeft--;
-
-            if (executionStack.back().repeatsLeft > 0) {
-                executionStack.back().pc = 0; // Reset loop back to its first instruction line
-                break; 
-            } else {
-                executionStack.pop_back(); // This frame level is done. Pop it!
-                if (!executionStack.empty()) {
-                    executionStack.back().pc++; // Move past the parent's FOR statement line
-                }
-            }
+void Process::executeCurrentCommand() {
+    // 1. Lazy-initialize the call stack
+    if (!isStackInitialized) {
+        if (!commandList.empty()) {
+            executionStack.push_back({commandList, 0, 1});
         }
-
-        if (executionStack.empty()) {
-            currentState = FINISHED;
-        }
+        isStackInitialized = true;
     }
 
-    // =========================================================
-    // COMPLEX DIAGNOSTIC METRICS
-    // =========================================================
+    // Stop immediately if we have reached or exceeded the totalLines budget
+    if (linesExecuted >= totalInstructions) {
+        currentState = FINISHED;
+        return;
+    }
 
-    std::string Process::getStartedAtString() const {
-        std::time_t timeValue = std::chrono::system_clock::to_time_t(startedAt);
-        std::tm localTime{};
-    #if defined(_WIN32)
-        localtime_s(&localTime, &timeValue);
-    #else
-        localtime_r(&timeValue, &localTime);
-    #endif
+    if (executionStack.empty()) {
+        currentState = FINISHED;
+        return;
+    }
 
-        std::ostringstream stream;
-        stream << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
-        return stream.str();
+    // Transition from READY to RUNNING
+    if (currentState == READY) {
+        currentState = RUNNING;
     }
 
     auto& currentFrame = executionStack.back();
@@ -174,6 +83,7 @@ void Process::addCommand(std::shared_ptr<ICommand> command) {
         currentState = FINISHED;
     }
 }
+
 void Process::moveToNextLine() {
     touch();
     if (executionStack.empty()) {
@@ -183,45 +93,59 @@ void Process::moveToNextLine() {
 
     // Advance the program counter for the top frame
     executionStack.back().pc++;
-    int Process::getCurrentInstructionLine() const {
-        if (!isStackInitialized && !commandList.empty()) {
-            return 1;
-        }
 
-        if (executionStack.empty()) {
-            return 0;
-        }
+    // Evaluate and unwind finished frames
+    while (!executionStack.empty() && executionStack.back().pc >= static_cast<int>(executionStack.back().instructions.size())) {
+        executionStack.back().repeatsLeft--;
 
-        const auto& currentFrame = executionStack.back();
-        if (currentFrame.pc < 0 || currentFrame.pc >= static_cast<int>(currentFrame.instructions.size())) {
-            return 0;
+        if (executionStack.back().repeatsLeft > 0) {
+            executionStack.back().pc = 0; // Reset loop back to its first instruction line
+            break; 
+        } else {
+            executionStack.pop_back(); // This frame level is done. Pop it!
+            if (!executionStack.empty()) {
+                executionStack.back().pc++; // Move past the parent's FOR statement line
+            }
         }
-
-        return currentFrame.pc + 1;
     }
+
+    if (executionStack.empty()) {
+        currentState = FINISHED;
+    }
+}
+
+// =========================================================
+// BASIC GETTERS, SETTERS & STATE ACCESSORS
+// =========================================================
+
+int Process::getPID() const { return pid; }
+std::string Process::getName() const { return name; }
+Process::ProcessState Process::getState() const { return currentState; }
+
+void Process::setState(ProcessState State) { 
+    currentState = State; 
+    touch(); 
 }
 
 bool Process::isFinished() const {
     return currentState == FINISHED || (isStackInitialized && executionStack.empty());
 }
 
-int Process::getPID() const { return pid; }
-Process::ProcessState Process::getState() const { return currentState; }
-std::string Process::getName() const { return name; }
-void Process::setState(ProcessState State) { currentState = State; touch(); }
 SymbolTable& Process::getSymbolTable() { return symbolTable; }
 
-// =========================================================
-// NEW DIAGNOSTIC READOUT METRICS
-// =========================================================
+int Process::getAssignedCore() const { return assignedCore; }
 
-int Process::getLinesExecuted() const { 
-    return linesExecuted; 
+void Process::setAssignedCore(int core) {
+    assignedCore = core;
+    touch();
 }
 
-int Process::getTotalLines() const {
-    return totalInstructions;
-}
+int Process::getLinesExecuted() const { return linesExecuted; }
+int Process::getTotalLines() const { return totalInstructions; }
+
+// =========================================================
+// COMPLEX DIAGNOSTIC METRICS
+// =========================================================
 
 std::string Process::getStartedAtString() const {
     std::time_t timeValue = std::chrono::system_clock::to_time_t(startedAt);
@@ -255,52 +179,36 @@ void Process::touch() {
     lastUpdatedAt = std::chrono::system_clock::now();
 }
 
-int Process::getAssignedCore() const {
-    return assignedCore;
-}
-
-void Process::setAssignedCore(int core) {
-    assignedCore = core;
-    touch();
-}
-
 int Process::getCurrentInstructionLine() const {
     if (!isStackInitialized && !commandList.empty()) {
         return 1;
     }
 
-    int Process::getCurrentFrameInstructionCount() const {
-        if (!isStackInitialized || executionStack.empty()) {
-            return static_cast<int>(commandList.size());
-        }
-
-        const auto& currentFrame = executionStack.back();
-        return static_cast<int>(currentFrame.instructions.size());
+    if (executionStack.empty()) {
+        return 0;
     }
 
-    void Process::printExecutionLogs() const {
-        if (logs.empty()) {
-            std::cout << "  (No execution logs recorded yet for this process)\n";
-            return;
-        }
-        for (const auto& logEntry : logs) {
-            std::cout << "  [Log] " << logEntry << "\n";
-        }
+    const auto& currentFrame = executionStack.back();
+    if (currentFrame.pc < 0 || currentFrame.pc >= static_cast<int>(currentFrame.instructions.size())) {
+        return 0;
     }
 
-    // =========================================================
-    // FLOW CONTROLS
-    // =========================================================
+    return currentFrame.pc + 1;
+}
 
-    void Process::pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats) {
-        // pc is initialized to -1 because moveToNextLine() runs right after execute,
-        // which increments it back up to 0 for the subsequent cycle tick.
-        executionStack.push_back({instructions, -1, repeats});
+int Process::getCurrentFrameInstructionCount() const {
+    if (!isStackInitialized || executionStack.empty()) {
+        return static_cast<int>(commandList.size());
     }
 
-    void Process::sleep(int ticks) {
-        sleepTicksRemaining = ticks;
-        currentState = WAITING; 
+    const auto& currentFrame = executionStack.back();
+    return static_cast<int>(currentFrame.instructions.size());
+}
+
+void Process::printExecutionLogs() const {
+    if (logs.empty()) {
+        std::cout << "  (No execution logs recorded yet for this process)\n";
+        return;
     }
     for (const auto& logEntry : logs) {
         std::cout << "  [Log] " << logEntry << "\n";
@@ -329,12 +237,7 @@ void Process::decrementSleepTicks() {
         sleepTicksRemaining--;
         if (sleepTicksRemaining == 0) {
             currentState = READY;
-
-    void Process::decrementSleepTicks() {
-        if (sleepTicksRemaining > 0) {
-            sleepTicksRemaining--;
-            if (sleepTicksRemaining == 0) {
-                currentState = READY;
-            }
+            touch();
         }
     }
+}
