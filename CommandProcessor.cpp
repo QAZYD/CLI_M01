@@ -283,15 +283,25 @@ void CommandProcessor::handleInitialize() {
         return;
     }
 
+    // Explicitly load configuration before checking parameters
+    configManager.loadConfig("config.txt"); // Make sure this matches your actual ConfigManager loading method name!
+
     const Config& config = configManager.getConfig();
-    if (config.scheduler == "fcfs") {
+    
+    // Debug point to print out what your program reads from config.txt
+    std::cout << "  [Debug] Configured Scheduler String read: '" << config.scheduler << "'\n";
+
+    if (config.scheduler == "fcfs" || config.scheduler == "FCFS") {
         activeScheduler = std::make_unique<FCFSScheduler>(config.numCpu, config.delayPerExec);
         isInitialized = true;
         std::cout << "  [System] FCFS Scheduler successfully allocated and staged.\n";
-    } else if (config.scheduler == "rr") {
+    } else if (config.scheduler == "rr" || config.scheduler == "RR") {
         activeScheduler = std::make_unique<RRScheduler>(config.quantumCycles, config.numCpu, config.delayPerExec);
         isInitialized = true;
         std::cout << "  [System] Round Robin Scheduler successfully allocated and staged.\n";
+    } else {
+        std::cout << "  [System] Error: Unknown or empty scheduler type '" << config.scheduler << "' in configuration.\n";
+        return;
     }
 
     if (isInitialized) {
