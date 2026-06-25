@@ -46,6 +46,9 @@ public:
 
     // Complex Metrics (Implemented in .cpp)
     std::string getStartedAtString() const;
+    std::string getLastUpdatedString() const;
+    int getAssignedCore() const;
+    void setAssignedCore(int core);
     int getCurrentInstructionLine() const;
     int getCurrentFrameInstructionCount() const;
     void printExecutionLogs() const;
@@ -54,6 +57,7 @@ public:
     void pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats);
     void sleep(int ticks);
     void decrementSleepTicks();
+    void touch();
 
 private:
     // Identity & State
@@ -74,4 +78,6 @@ private:
     int assignedCore;
     std::vector<std::string> logs;
     std::chrono::system_clock::time_point startedAt;
+    std::chrono::system_clock::time_point lastUpdatedAt;
+    int assignedCore;
 };
