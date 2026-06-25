@@ -1,7 +1,7 @@
 //Number of CPUs available. The range is [1, 128].
 num-cpu 4
 //The scheduler algorithm: “fcfs” or “rr”.
-scheduler "rr"
+scheduler "fcfs"
 //The time slice is given for each processor if a round-robin scheduler is used
 // Has no effect on other schedulers. The range is [1, 2^32].
 quantum-cycles 5

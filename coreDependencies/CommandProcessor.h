@@ -1,35 +1,26 @@
-#ifndef COMMAND_PROCESSOR_H
-#define COMMAND_PROCESSOR_H
-
+#pragma once
 #include <string>
-#include <map>
+#include <unordered_map>
 
 class CommandProcessor {
 public:
     CommandProcessor();
-    
-    // Processes the input string and returns false if the program should exit
     bool execute(const std::string& input);
 
 private:
-    // Typedef for internal command handler functions
-    using CommandHandler = void (CommandProcessor::*)();
+    // Typedef for a member function pointer on CommandProcessor that takes no args and returns void
+    typedef void (CommandProcessor::*CommandHandler)();
+    std::unordered_map<std::string, CommandHandler> commandMap;
 
-    // Map to link a string token to its corresponding member function
-    std::map<std::string, CommandHandler> commandMap;
+    std::string trim(const std::string& str);
 
-    // Command handlers
+    // Command Handler Declarations
     void handleInitialize();
     void handleScreen_s();
-    void handleScreen_r();
     void handleScreen_ls();
+    void handleScreen_r();
     void handleSchedulerStart();
     void handleSchedulerStop();
     void handleReportUtil();
     void handleHelp();
-
-    // Helper utility
-    std::string trim(const std::string& str);
 };
-
-#endif // COMMAND_PROCESSOR_H
