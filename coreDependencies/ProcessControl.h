@@ -37,7 +37,7 @@ public:
     int getLinesExecuted() const;
     int getTotalLines() const;
     void printExecutionLogs() const;
-
+    int getSleepTicksRemaining() const { return sleepTicksRemaining; }
     void setState(ProcessState State);
     SymbolTable& getSymbolTable();
 

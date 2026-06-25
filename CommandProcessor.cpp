@@ -35,6 +35,7 @@ bool CommandProcessor::execute(const std::string& input) {
     // CONTEXT A: INSIDE A PROCESS SCREEN
     // =========================================================================
     if (currentAttachedProcess != nullptr) {
+        
         if (trimmed == "process-smi") {
             handleProcessSMI();
         } 
@@ -108,7 +109,8 @@ void CommandProcessor::handleScreen_s(const std::string& processName) {
 
     // Construct the new Process object
     // Note: Modify this instantiation parameters to match your actual 'Process' constructor layout
-    auto newProc = std::make_shared<Process>(processName, nextPID++, totalInstructions);
+    // Change this line:
+    auto newProc = std::make_shared<Process>(nextPID++, processName, totalInstructions);
     
     // Track it locally and dispatch to the staged scheduler ready queue
     processMap[processName] = newProc;
@@ -136,30 +138,43 @@ void CommandProcessor::handleProcessSMI() {
         std::cout << "  Status       : Running / Staged\n";
     }
 
-    // Print dummy progress and log history metric values 
-    // Adjust these getters to match the definitions inside your ProcessControl class
+    // Print progress and log history metric values 
     std::cout << "  Progress     : " << currentAttachedProcess->getLinesExecuted() 
               << " / " << currentAttachedProcess->getTotalLines() << " instructions.\n";
     std::cout << "--------------------- LOGS ---------------------\n";
     
-    // Mock execution instruction print logs (or call your actual log tracker)
+    // Call your actual log tracker to print out what just executed!
     currentAttachedProcess->printExecutionLogs(); 
     std::cout << "================================================\n\n";
 }
 
 void CommandProcessor::handleInitialize() {
     std::cout << "\n  [initialize] Reading configuration from 'config.txt'...\n";
+    
     if (configManager.loadConfig("config.txt")) {
         const Config& config = configManager.getConfig();
+        
         if (config.scheduler == "fcfs") {
             activeScheduler = std::make_unique<FCFSScheduler>(config.numCpu, config.delayPerExec);
             isInitialized = true;
             std::cout << "  [System] FCFS Scheduler successfully allocated and staged.\n";
+            
+            // =========================================================================
+            // SPIN UP BACKGROUND THREAD IMMEDIATELY UPON INITIALIZATION
+            // =========================================================================
+            std::cout << "  [System] Activating background CPU execution cores...\n";
+            schedulerWorkerThread = std::thread(&Scheduler::run, activeScheduler.get());
+            schedulerWorkerThread.detach(); 
+            // =========================================================================
         } 
         else if (config.scheduler == "rr") {
             activeScheduler = std::make_unique<RRScheduler>(config.quantumCycles, config.numCpu, config.delayPerExec);
             isInitialized = true;
             std::cout << "  [System] Round Robin Scheduler successfully allocated and staged.\n";
+            
+            // Do the same here if RRScheduler implements run()
+            schedulerWorkerThread = std::thread(&Scheduler::run, activeScheduler.get());
+            schedulerWorkerThread.detach();
         }
     } else {
         std::cerr << "  Error: Could not open or parse 'config.txt'.\n\n";

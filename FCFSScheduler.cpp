@@ -52,15 +52,27 @@ void FCFSScheduler::run() {
         }
 
         // Step 2: Parallel Execution Phase (1 clock tick across all active cores)
-        for (int i = 0; i < totalCPUs; ++i) {
-            if (cores[i] && !cores[i]->isFinished()) {
-                coreActivityThisCycle = true;
-                
-                // Advance the script by exactly ONE instruction line on this core
-                cores[i]->executeCurrentCommand();
-                cores[i]->moveToNextLine();
+       for (int i = 0; i < totalCPUs; ++i) {
+    if (cores[i] && !cores[i]->isFinished()) {
+        coreActivityThisCycle = true;
+        
+        // Check if the process is currently supposed to be sleeping
+        if (cores[i]->getState() == Process::WAITING) {
+            
+            cores[i]->decrementSleepTicks(); // Tick down remaining sleep time
+            
+            // If it's done sleeping, wake it back up for the next cycle
+            if (cores[i]->getSleepTicksRemaining() <= 0) {
+                cores[i]->setState(Process::RUNNING);
             }
+            
+        } else {
+            // Process is awake! Execute its current command normally
+            cores[i]->executeCurrentCommand();
+            cores[i]->moveToNextLine();
         }
+    }
+}
 
         // Step 3: Configurable Cycle Sleep / Performance Control
         if (coreActivityThisCycle) {

@@ -48,17 +48,23 @@ std::shared_ptr<ICommand> generateRandomCommand(std::mt19937& gen, int currentDe
         return std::make_shared<ForCommand>(loopBody, repeatDist(gen));
     } 
     else {
-        // Here is where the specific headers you included above are instantiated!
         int actionChoice = actionDist(gen);
         switch (actionChoice) {
             case 0: 
+                // Double check your DeclareCommand constructor parameters too!
                 return std::make_shared<DeclareCommand>("mockVar", 0); 
+            
             case 1: 
-                return std::make_shared<AddCommand>("mockVar", 1);
+                // FIXED: Passes 3 strings to match (dest, op1, op2) -> e.g., mockVar = mockVar + 1
+                return std::make_shared<AddCommand>("mockVar", "mockVar", "1");
+            
             case 2: 
-                return std::make_shared<SubtractCommand>("mockVar", 1);
+                // FIXED: Passes 3 strings to match (dest, op1, op2) -> e.g., mockVar = mockVar - 1
+                return std::make_shared<SubtractCommand>("mockVar", "mockVar", "1");
+            
             case 3: 
             default:
+                // Double check your PrintCommand constructor parameters too!
                 return std::make_shared<PrintCommand>("mockVar");
         }
     }
@@ -173,6 +179,7 @@ int Process::getLinesExecuted() const {
 int Process::getTotalLines() const { 
     return static_cast<int>(commandList.size()); 
 }
+
 
 void Process::printExecutionLogs() const {
     if (logs.empty()) {
