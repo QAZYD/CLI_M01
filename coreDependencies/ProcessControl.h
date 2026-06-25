@@ -49,6 +49,8 @@ public:
 private:
     int pid;
     int maxLines;
+    int totalInstructions;
+    int generatedInstructions = 0;
     std::string name;
     ProcessState currentState;
     
