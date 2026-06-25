@@ -6,18 +6,20 @@
 #include <atomic>
 #include "IETThread.h"
 #include "ProcessControl.h"
+#include "Scheduler.h" // Include the new interface definition
 
-class FCFSScheduler : public IETThread
+// Inherit from both IETThread and the Scheduler interface
+class FCFSScheduler : public IETThread, public Scheduler
 {
 public:
-    // Constructor now accepts configuration details directly
     FCFSScheduler(int numCPUs, int delayPerExec);
     ~FCFSScheduler() override = default;
 
-    void addProcess(std::shared_ptr<Process> process);
-    void stop();
-
-protected:
+    // Interface overrides marked explicitly with 'override'
+    void addProcess(std::shared_ptr<Process> process) override;
+    void stop() override;
+    
+    // Moved to public so it can be called polymorphically via a Scheduler pointer
     void run() override;
 
 private:
@@ -25,10 +27,8 @@ private:
     std::mutex queueMutex;
     std::atomic<bool> isRunning;
 
-    // Config parameters from your pseudo-config file
     int totalCPUs;
     int delayPerExecution;
 
-    // Array tracking what is currently running on each core
     std::vector<std::shared_ptr<Process>> cores;
 };

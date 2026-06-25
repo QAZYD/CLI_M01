@@ -6,17 +6,20 @@
 #include <atomic>
 #include "IETThread.h"
 #include "ProcessControl.h"
+#include "Scheduler.h" // Include the new interface definition
 
-class RRScheduler : public IETThread
+// Inherit from both IETThread and the Scheduler interface
+class RRScheduler : public IETThread, public Scheduler
 {
 public:
     RRScheduler(int quantumCycles, int numCPUs, int delayPerExec);
     ~RRScheduler() override = default;
 
-    void addProcess(std::shared_ptr<Process> process);
-    void stop();
-
-protected:
+    // Interface overrides marked explicitly with 'override'
+    void addProcess(std::shared_ptr<Process> process) override;
+    void stop() override;
+    
+    // Moved to public so it can be called polymorphically via a Scheduler pointer
     void run() override;
 
 private:
@@ -28,7 +31,6 @@ private:
     int totalCPUs;
     int delayPerExecution;
 
-    // Parallel vectors matching your CPU core layout
-    std::vector<std::shared_ptr<Process>> cores; // Tracks which process is on which core
-    std::vector<int> coreQuantumCounters;        // Tracks cycles executed *per core*
+    std::vector<std::shared_ptr<Process>> cores; 
+    std::vector<int> coreQuantumCounters;        
 };

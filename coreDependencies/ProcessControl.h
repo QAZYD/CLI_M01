@@ -21,7 +21,8 @@ public:
         int repeatsLeft = 1;
     };
 
-    Process(int pid, std::string name);
+    // Constructor updated with an optional totalLines parameter for dummy generation
+    Process(int pid, std::string name, int totalLines = 0);
 
     void addCommand(std::shared_ptr<ICommand> command);
     void executeCurrentCommand();
@@ -31,6 +32,11 @@ public:
     int getPID() const;
     ProcessState getState() const;
     std::string getName() const;
+
+    // New diagnostic metrics getters called by process-smi
+    int getLinesExecuted() const;
+    int getTotalLines() const;
+    void printExecutionLogs() const;
 
     void setState(ProcessState State);
     SymbolTable& getSymbolTable();
@@ -51,4 +57,8 @@ private:
     std::vector<std::shared_ptr<ICommand>> commandList; 
     SymbolTable symbolTable;
     int sleepTicksRemaining;
+
+    // New tracking variables for diagnostic readouts
+    int linesExecuted;
+    std::vector<std::string> logs;
 };
