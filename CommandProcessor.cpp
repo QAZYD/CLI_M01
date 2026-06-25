@@ -342,6 +342,9 @@ void CommandProcessor::handleInitialize() {
         activeScheduler = std::make_shared<RRScheduler>(config.quantumCycles, config.numCpu, config.delayPerExec);
         isInitialized = true;
         std::cout << "  [System] Round Robin Scheduler successfully allocated and staged.\n";
+    } else {
+        std::cout << "  [System] Error: Unknown or empty scheduler type '" << config.scheduler << "' in configuration.\n";
+        return;
     }
 
     if (isInitialized) {
