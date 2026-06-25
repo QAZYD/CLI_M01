@@ -180,7 +180,6 @@ int Process::getTotalLines() const {
     return static_cast<int>(commandList.size()); 
 }
 
-
 void Process::printExecutionLogs() const {
     if (logs.empty()) {
         std::cout << "  (No execution logs recorded yet for this process)\n";
