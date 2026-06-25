@@ -275,6 +275,14 @@ void CommandProcessor::handleSchedulerStart() { std::cout << "\n  [scheduler-sta
 void CommandProcessor::handleSchedulerStop()  { std::cout << "\n  [scheduler-stop] command recognized.\n"; }
 void CommandProcessor::handleHelp() {
     std::cout << "\n  Available commands: initialize, screen -s <name>, screen -ls, scheduler-start, scheduler-stop, report-util, exit\n";
+}
+
+void CommandProcessor::handleInitialize() {
+    if (isInitialized) {
+        std::cout << "  [System] Error: System is already initialized.\n";
+        return;
+    }
+
     const Config& config = configManager.getConfig();
     if (config.scheduler == "fcfs") {
         activeScheduler = std::make_unique<FCFSScheduler>(config.numCpu, config.delayPerExec);
@@ -291,8 +299,4 @@ void CommandProcessor::handleHelp() {
         schedulerWorkerThread = std::thread(&Scheduler::run, activeScheduler.get());
         schedulerWorkerThread.detach(); 
     }
-}
-
-void CommandProcessor::handleInitialize() {
-    handleHelp();
 }
