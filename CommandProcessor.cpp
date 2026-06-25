@@ -1,4 +1,4 @@
-#include "CommandProcessor.h"
+#include "coreDependencies/CommandProcessor.h"
 #include <iostream>
 #include <algorithm>
 

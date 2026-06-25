@@ -1,4 +1,4 @@
-#include "SymbolTable.h"
+#include "coreDependencies/SymbolTable.h"
 
 bool SymbolTable::contains(const std::string& name) const {
     return table.find(name) != table.end();

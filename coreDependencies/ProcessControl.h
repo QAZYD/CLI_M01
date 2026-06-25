@@ -3,8 +3,8 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include "coreDependencies/SymbolTable.h"
-#include "coreDependencies/ICommand.h"
+#include "SymbolTable.h"
+#include "ICommand.h"
 
 class Process {
 public:

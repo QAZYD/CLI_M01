@@ -1,7 +1,7 @@
-#include "ConfigManager.h"
-
+#include "coreDependencies/configManager.h"
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 bool ConfigManager::loadConfig(const std::string& filename)
 {
@@ -11,39 +11,53 @@ bool ConfigManager::loadConfig(const std::string& filename)
         return false;
     }
 
-    std::string key;
+    std::string line;
+    // 1. Read line-by-line instead of word-by-word
+    while (std::getline(file, line)) {
+        
+        // Remove leading/trailing whitespaces or skip entirely empty lines
+        if (line.empty()) continue;
 
-    while (file >> key) {
-        if (key == "num-cpu") {
-            file >> config.numCpu;
+        // 2. Safely ignore comment lines
+        // Finds if the line starts with "//". We can trim spaces if comments are indented.
+        size_t firstNonSpace = line.find_first_not_of(" \t\r\n");
+        if (firstNonSpace == std::string::npos || line.compare(firstNonSpace, 2, "//") == 0) {
+            continue; // Skip comments and blank lines
         }
 
-        else if (key == "scheduler") {
-            file >> config.scheduler;
+        // 3. Parse the clean line using a string stream
+        std::stringstream ss(line);
+        std::string key;
+        ss >> key;
 
-            // remove quotes
+        if (key == "num-cpu") {
+            ss >> config.numCpu;
+        }
+        else if (key == "scheduler") {
+            ss >> config.scheduler;
+
+            // Clean up surrounding quotes
             if (!config.scheduler.empty() && config.scheduler.front() == '"') {
                 config.scheduler.erase(0, 1);
             }
-
             if (!config.scheduler.empty() && config.scheduler.back() == '"') {
                 config.scheduler.pop_back();
             }
         }
         else if (key == "quantum-cycles") {
-            file >> config.quantumCycles;
+            ss >> config.quantumCycles;
         }
         else if (key == "batch-process-freq") {
-            file >> config.batchProcessFreq;
+            ss >> config.batchProcessFreq;
         }
         else if (key == "min-ins") {
-            file >> config.minIns;
+            ss >> config.minIns;
         }
         else if (key == "max-ins") {
-            file >> config.maxIns;
+            ss >> config.maxIns;
         }
         else if (key == "delay-per-exec") {
-            file >> config.delayPerExec;
+            ss >> config.delayPerExec;
         }
     }
 
