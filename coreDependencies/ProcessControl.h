@@ -22,55 +22,60 @@ public:
         int repeatsLeft = 1;
     };
 
-    // Constructor updated with an optional totalLines parameter for dummy generation
+    // Lifecycle & Core Execution
     Process(int pid, std::string name, int totalLines = 0);
-
     void addCommand(std::shared_ptr<ICommand> command);
     void executeCurrentCommand();
     void moveToNextLine();
 
-    bool isFinished() const;
-    int getPID() const;
-    ProcessState getState() const;
-    std::string getName() const;
+    // Fast Inline Getters & Setters
+    int getPID() const { return pid; }
+    std::string getName() const { return name; }
+    ProcessState getState() const { return currentState; }
+    void setState(ProcessState state) { currentState = state; }
+    
+    bool isFinished() const { return currentState == FINISHED || (isStackInitialized && executionStack.empty()); }
+    SymbolTable& getSymbolTable() { return symbolTable; }
 
-    // New diagnostic metrics getters called by process-smi
-    int getLinesExecuted() const;
-    int getTotalLines() const;
-    void printExecutionLogs() const;
+    // Diagnostic Metrics Getters (Simple Inlines)
+    int getLinesExecuted() const { return linesExecuted; }
+    int getTotalLines() const { return totalInstructions; }
     int getSleepTicksRemaining() const { return sleepTicksRemaining; }
+    int getAssignedCore() const { return assignedCore; }
+    void setAssignedCore(int core) { assignedCore = core; }
+
+    // Complex Metrics (Implemented in .cpp)
     std::string getStartedAtString() const;
     std::string getLastUpdatedString() const;
     int getAssignedCore() const;
     void setAssignedCore(int core);
     int getCurrentInstructionLine() const;
     int getCurrentFrameInstructionCount() const;
-    void setState(ProcessState State);
-    SymbolTable& getSymbolTable();
+    void printExecutionLogs() const;
 
-    // Controls for flow interception
+    // Flow Interception Controls
     void pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats);
     void sleep(int ticks);
     void decrementSleepTicks();
     void touch();
 
 private:
+    // Identity & State
     int pid;
-    int maxLines;
-    int totalInstructions;
-    int generatedInstructions = 0;
     std::string name;
     ProcessState currentState;
     
+    // Core VM / Execution Stack
     std::vector<ExecutionFrame> executionStack;
-    bool isStackInitialized;
-
     std::vector<std::shared_ptr<ICommand>> commandList; 
     SymbolTable symbolTable;
-    int sleepTicksRemaining;
+    bool isStackInitialized;
 
-    // New tracking variables for diagnostic readouts
+    // Execution Diagnostics & Tracking
+    int totalInstructions;
     int linesExecuted;
+    int sleepTicksRemaining;
+    int assignedCore;
     std::vector<std::string> logs;
     std::chrono::system_clock::time_point startedAt;
     std::chrono::system_clock::time_point lastUpdatedAt;
