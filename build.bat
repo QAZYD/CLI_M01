@@ -8,6 +8,7 @@ FCFSScheduler.cpp ^
 RRScheduler.cpp ^
 SymbolTable.cpp ^
 IETTHeard.cpp ^
+CommandGenerator.cpp ^
 -I. -o main
 
 if %errorlevel% neq 0 (

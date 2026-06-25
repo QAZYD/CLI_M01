@@ -292,3 +292,8 @@ void CommandProcessor::handleHelp() {
         schedulerWorkerThread.detach(); 
     }
 }
+
+void CommandProcessor::handleInitialize() {
+    // TODO: Add your actual initialization logic here if needed
+    std::cout << "\n  [initialize] command recognized.\n";
+}

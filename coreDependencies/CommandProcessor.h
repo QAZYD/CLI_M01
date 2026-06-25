@@ -11,6 +11,7 @@
 class CommandProcessor {
 public:
     CommandProcessor();
+    void handleInitialize();
     bool execute(const std::string& input);
 
 private:
@@ -31,18 +32,14 @@ private:
     uint32_t nextPID = 1;
 
     // Command Handlers
-    void handleInitialize();
-    void handleScreen_s(const std::string& processName); 
     
-    // Inline Stub Implementations (Moved from .cpp to trim code footprint)
-    void handleScreen_ls()       { std::cout << "\n  [screen_ls] command recognized.\n"; }
-    void handleScreen_r()        { std::cout << "\n  [screen_r] command recognized.\n"; }
-    void handleSchedulerStart()  { std::cout << "\n  [scheduler-start] command recognized.\n"; }
-    void handleSchedulerStop()   { std::cout << "\n  [scheduler-stop] command recognized.\n"; }
-    void handleReportUtil()      { std::cout << "\n  [report-util] command recognized.\n"; }
-    void handleHelp() {
-        std::cout << "\n  Available commands: initialize, screen -s <name>, scheduler-start, scheduler-stop, report-util, exit\n";
-    }
+    void handleScreen_s(const std::string& processName);
+    void handleScreen_ls();
+    void handleHelp();
+    void handleReportUtil();
+    void handleScreen_r();
+    void handleSchedulerStart();
+    void handleSchedulerStop(); 
     
     // Process Screen Specific Handlers
     void handleProcessSMI();

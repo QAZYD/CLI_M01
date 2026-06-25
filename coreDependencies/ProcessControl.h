@@ -22,38 +22,42 @@ public:
         int repeatsLeft = 1;
     };
 
-    // Lifecycle & Core Execution
+    // =========================================================
+    // LIFECYCLE & CORE EXECUTION
+    // =========================================================
     Process(int pid, std::string name, int totalLines = 0);
     void addCommand(std::shared_ptr<ICommand> command);
     void executeCurrentCommand();
     void moveToNextLine();
 
-    // Fast Inline Getters & Setters
-    int getPID() const { return pid; }
-    std::string getName() const { return name; }
-    ProcessState getState() const { return currentState; }
-    void setState(ProcessState state) { currentState = state; }
-    
-    bool isFinished() const { return currentState == FINISHED || (isStackInitialized && executionStack.empty()); }
-    SymbolTable& getSymbolTable() { return symbolTable; }
+    // =========================================================
+    // STATE ACCESSORS & GETTERS/SETTERS
+    // =========================================================
+    int getPID() const;
+    std::string getName() const;
+    ProcessState getState() const;
+    void setState(ProcessState state);
+    bool isFinished() const;
+    SymbolTable& getSymbolTable();
 
-    // Diagnostic Metrics Getters (Simple Inlines)
-    int getLinesExecuted() const { return linesExecuted; }
-    int getTotalLines() const { return totalInstructions; }
-    int getSleepTicksRemaining() const { return sleepTicksRemaining; }
-    int getAssignedCore() const { return assignedCore; }
-    void setAssignedCore(int core) { assignedCore = core; }
-
-    // Complex Metrics (Implemented in .cpp)
-    std::string getStartedAtString() const;
-    std::string getLastUpdatedString() const;
+    // =========================================================
+    // DIAGNOSTIC METRICS
+    // =========================================================
+    int getLinesExecuted() const;
+    int getTotalLines() const;
+    int getSleepTicksRemaining() const { return sleepTicksRemaining; } // Kept inline (not in .cpp)
     int getAssignedCore() const;
     void setAssignedCore(int core);
+
+    std::string getStartedAtString() const;
+    std::string getLastUpdatedString() const;
     int getCurrentInstructionLine() const;
     int getCurrentFrameInstructionCount() const;
     void printExecutionLogs() const;
 
-    // Flow Interception Controls
+    // =========================================================
+    // FLOW INTERCEPTION CONTROLS
+    // =========================================================
     void pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats);
     void sleep(int ticks);
     void decrementSleepTicks();
@@ -75,9 +79,8 @@ private:
     int totalInstructions;
     int linesExecuted;
     int sleepTicksRemaining;
-    int assignedCore;
+    int assignedCore; // Fixed: Removed the duplicate declaration of this variable
     std::vector<std::string> logs;
     std::chrono::system_clock::time_point startedAt;
     std::chrono::system_clock::time_point lastUpdatedAt;
-    int assignedCore;
 };

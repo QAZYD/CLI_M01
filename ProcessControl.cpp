@@ -1,5 +1,5 @@
 #include "coreDependencies/ProcessControl.h" 
-#include "CommandGenerator.h"              // Handles our decoupled program generation
+#include "coreDependencies/CommandGenerator.h"              // Handles our decoupled program generation
 #include "ICommandChildren/SleepCommand.h" // Kept for dynamic pointer checking
 #include "ICommandChildren/ForCommand.h"   // Kept for dynamic pointer checking
 
