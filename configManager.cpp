@@ -59,6 +59,9 @@ bool ConfigManager::loadConfig(const std::string& filename)
         else if (key == "delay-per-exec") {
             ss >> config.delayPerExec;
         }
+        else if(key == "varConfig"){
+            ss >> config.varPrint;
+        }
     }
 
     return true;

@@ -1,95 +1,134 @@
 #include "coreDependencies/FCFSScheduler.h"
 #include <iostream>
 
-FCFSScheduler::FCFSScheduler(int numCPUs, int delayPerExec) 
-    : isRunning(true), totalCPUs(numCPUs), delayPerExecution(delayPerExec) 
-{
-    // Initialize our virtual core slots to be completely empty
-    cores.resize(totalCPUs, nullptr);
+FCFSScheduler::FCFSScheduler(int cores, int delayCycles) 
+    : totalCores(cores), delayPerExec(delayCycles), isRunning(false), cpuCycles(0), activeWorkerCount(0) {
+    if (totalCores <= 0) totalCores = 1; 
 }
 
-void FCFSScheduler::addProcess(std::shared_ptr<Process> process) {
-    std::lock_guard<std::mutex> lock(queueMutex);
-    process->setState(Process::READY);
-    readyQueue.push(process);
-    
-    std::cout << "[FCFS] Process " << process->getName() 
-              << " (PID: " << process->getPID() << ") entered the ready queue.\n";
+void FCFSScheduler::start() {
+    if (isRunning) return;
+    isRunning = true;
+
+    // 1. Spin up the multi-threaded core workers
+    for (int i = 0; i < totalCores; ++i) {
+        coreThreads.push_back(std::thread(&FCFSScheduler::runLoop, this, i));
+    }
+
+    // 2. Spin up the master clock thread running your pseudocode loop
+    masterClockThread = std::thread(&FCFSScheduler::masterClockLoop, this);
 }
 
 void FCFSScheduler::stop() {
+    if (!isRunning) return;
     isRunning = false;
+
+    // Wake up everything so threads can exit cleanly
+    tickCv.notify_all();
+
+    if (masterClockThread.joinable()) {
+        masterClockThread.join();
+    }
+
+    for (auto& thread : coreThreads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    coreThreads.clear();
 }
 
-void FCFSScheduler::run() {
-    std::cout << "[FCFS] Background Scheduler Active. Cores: " << totalCPUs 
-              << " | Cycle Delay: " << delayPerExecution << "ms\n";
+FCFSScheduler::~FCFSScheduler() {
+    stop();
+}
+
+void FCFSScheduler::pushProcess(std::shared_ptr<Process> process) {
+    std::lock_guard<std::mutex> lock(tickMutex);
+    readyQueue.push(process);
+}
+
+// --- THE MASTER CLOCK LOOP (Your Pseudocode) ---
+void FCFSScheduler::masterClockLoop() {
+    while (isRunning) {
+        {
+            std::unique_lock<std::mutex> lock(tickMutex);
+            
+            // Wait until all core threads have finished processing the current cycle
+            tickCv.wait(lock, [this]() { 
+                return activeWorkerCount == 0 || !isRunning; 
+            });
+
+            if (!isRunning) break;
+
+            // Increment CPU cycles exactly like your pseudocode
+            cpuCycles++;
+
+            // Reset worker status flags for the new cycle
+            activeWorkerCount = totalCores;
+        }
+
+        // Broadcast to all multi-threaded cores that a new cycle has arrived
+        tickCv.notify_all();
+        
+        // Optional: Throttle the simulation speed slightly so it doesn't max out your host system
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+// --- MULTI-THREADED CORE LOOP ---
+void FCFSScheduler::runLoop(int coreId) {
+    CoreState core;
+    int lastProcessedCycle = 0;
 
     while (isRunning) {
-        bool coreActivityThisCycle = false;
+        std::unique_lock<std::mutex> lock(tickMutex);
 
-        // Step 1: Core Lifecycle Management
-        for (int i = 0; i < totalCPUs; ++i) {
-            // Clean up completed processes on this core
-            if (cores[i] && cores[i]->isFinished()) {
-                std::cout << "[FCFS] [Core " << i << "] Process " << cores[i]->getName() 
-                          << " [PID: " << cores[i]->getPID() << "] completed execution.\n";
-                cores[i]->setAssignedCore(-1);
-                cores[i] = nullptr;
+        // Wait for the master clock to advance to a new cycle
+        tickCv.wait(lock, [this, &lastProcessedCycle]() {
+            return cpuCycles > lastProcessedCycle || !isRunning;
+        });
+
+        if (!isRunning) break;
+        lastProcessedCycle = cpuCycles;
+
+        // 1. Core Idle Check: Grab a process if empty
+        if (!core.currentProcess && !readyQueue.empty()) {
+            core.currentProcess = readyQueue.front();
+            readyQueue.pop();
+            core.currentProcess->setAssignedCore(coreId);
+            if (core.currentProcess->getRunStartTime() == "N/A") {
+                core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
             }
+            core.remainingDelayCycles = 0; 
+        }
 
-            // If this core is empty, try to populate it with the next process in line
-            if (cores[i] == nullptr) {
-                std::lock_guard<std::mutex> lock(queueMutex);
-                if (!readyQueue.empty()) {
-                    cores[i] = readyQueue.front();
-                    readyQueue.pop();
-                    cores[i]->setState(Process::RUNNING);
-                    cores[i]->setAssignedCore(i);
-                    
-                    std::cout << "[FCFS] [Core " << i << "] Dispatching Process: " 
-                              << cores[i]->getName() << " [PID: " << cores[i]->getPID() << "]\n";
+        // 2. Core Execution Step
+        if (core.currentProcess) {
+            if (core.remainingDelayCycles > 0) {
+                // Scheme: "Busy-waiting wherein the process remains in the CPU"
+                core.remainingDelayCycles--;
+            } else {
+                // Scheme: "If zero, each instruction is executed per CPU cycle"
+                core.currentProcess->executeCurrentCommand();
+                core.currentProcess->moveToNextLine();
+
+                if (core.currentProcess->isFinished()) {
+                    core.currentProcess = nullptr; // Process completed, clear core
+                } else {
+                    core.remainingDelayCycles = delayPerExec; 
                 }
             }
         }
 
-        // Step 2: Parallel Execution Phase (1 clock tick across all active cores)
-       for (int i = 0; i < totalCPUs; ++i) {
-    if (cores[i] && !cores[i]->isFinished()) {
-        coreActivityThisCycle = true;
-        
-        // Check if the process is currently supposed to be sleeping
-        if (cores[i]->getState() == Process::WAITING) {
-            
-            cores[i]->decrementSleepTicks(); // Tick down remaining sleep time
-            
-            // If it's done sleeping, wake it back up for the next cycle
-            if (cores[i]->getSleepTicksRemaining() <= 0) {
-                cores[i]->setState(Process::RUNNING);
-            }
-            
-        } else {
-            // Process is awake! Execute its current command normally
-            cores[i]->executeCurrentCommand();
-            cores[i]->moveToNextLine();
+        // Signal back to the master clock that this core thread is done for this cycle
+        activeWorkerCount--;
+        if (activeWorkerCount == 0) {
+            tickCv.notify_all(); // Wake up master clock if this was the last thread
         }
     }
 }
 
-        // Step 3: Configurable Cycle Sleep / Performance Control
-        if (coreActivityThisCycle) {
-            // If delay-per-exec is 0, we apply a tiny 1ms/10ms safety sleep 
-            // so your computer's real host hardware CPU doesn't spike to 100% capacity
-            if (delayPerExecution == 0) {
-                IETThread::sleep(1); 
-            } else {
-                IETThread::sleep(delayPerExecution);
-            }
-        } else {
-            // All cores are totally idle, rest deeply until new processes are generated
-            IETThread::sleep(50);
-        }
-    }
-
-    std::cout << "[FCFS] Background Scheduler Thread Stopped.\n";
+int FCFSScheduler::getCPUCycles() const {
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(tickMutex));
+    return cpuCycles;
 }

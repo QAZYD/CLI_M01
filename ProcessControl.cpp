@@ -1,42 +1,52 @@
 #include "coreDependencies/ProcessControl.h" 
-#include "coreDependencies/CommandGenerator.h"              // Handles our decoupled program generation
-#include "ICommandChildren/SleepCommand.h" // Kept for dynamic pointer checking
-#include "ICommandChildren/ForCommand.h"   // Kept for dynamic pointer checking
-
-#include <iostream>
+#include "coreDependencies/CommandGenerator.h"
+#include "ICommandChildren/SleepCommand.h" 
+#include "ICommandChildren/ForCommand.h"   
+#include <chrono>
+#include <ctime>
 #include <iomanip>
 #include <sstream>
-#include <ctime>
-#include <chrono>
 #include <algorithm>
 
 // =========================================================
 // LIFECYCLE & CORE EXECUTION
 // =========================================================
 
-Process::Process(int pid, std::string name, int totalLines)
+Process::Process(int pid, std::string name, int totalLines,  std::mt19937& gen, bool varPrint)
     : pid(pid), 
       name(name), 
       currentState(READY), 
       isStackInitialized(false), 
       sleepTicksRemaining(0), 
       linesExecuted(0), 
-      startedAt(std::chrono::system_clock::now()), 
-      lastUpdatedAt(std::chrono::system_clock::now()),
       assignedCore(-1), 
+      runStartTime("N/A"),
       totalInstructions(totalLines)
 {
-    // Delegate the random layout construction entirely to our specialized generator
-    commandList = CommandGenerator::generateProgram(totalLines, name);
+    commandList = CommandGenerator::generateProgram(totalLines, name, gen, varPrint);
 }
 
 void Process::addCommand(std::shared_ptr<ICommand> command) {
     commandList.push_back(command);
-    touch();
+}
+
+std::string Process::captureCurrentTimestamp() const {
+    auto now = std::chrono::system_clock::now();
+    std::time_t timeValue = std::chrono::system_clock::to_time_t(now);
+    std::tm localTime{};
+
+#if defined(_WIN32)
+    localtime_s(&localTime, &timeValue);
+#else
+    localtime_r(&timeValue, &localTime);
+#endif
+
+    std::ostringstream stream;
+    stream << std::put_time(&localTime, "%m/%d/%Y %I:%M:%S %p");
+    return stream.str();
 }
 
 void Process::executeCurrentCommand() {
-    // 1. Lazy-initialize the call stack
     if (!isStackInitialized) {
         if (!commandList.empty()) {
             executionStack.push_back({commandList, 0, 1});
@@ -44,18 +54,11 @@ void Process::executeCurrentCommand() {
         isStackInitialized = true;
     }
 
-    // Stop immediately if we have reached or exceeded the totalLines budget
-    if (linesExecuted >= totalInstructions) {
+    if (linesExecuted >= totalInstructions || executionStack.empty()) {
         currentState = FINISHED;
         return;
     }
 
-    if (executionStack.empty()) {
-        currentState = FINISHED;
-        return;
-    }
-
-    // Transition from READY to RUNNING
     if (currentState == READY) {
         currentState = RUNNING;
     }
@@ -63,13 +66,22 @@ void Process::executeCurrentCommand() {
     auto& currentFrame = executionStack.back();
     if (currentFrame.pc >= 0 && currentFrame.pc < static_cast<int>(currentFrame.instructions.size())) {
         auto currentCmd = currentFrame.instructions[currentFrame.pc];
-
-        // Increment executed lines counter and log
         linesExecuted++;
-        logs.push_back("Executed command line index: " + std::to_string(currentFrame.pc));
-        touch();
 
-        // INTERCEPTION LAYER
+        std::string exactTime = captureCurrentTimestamp();
+        int currentLine = getCurrentInstructionLine(); 
+        int limitLines = getTotalLines();
+
+        LogEntry entry = {
+            currentCmd->toString(),
+            exactTime,
+            currentLine,
+            limitLines
+        };
+
+        commandLogs.push_back(entry);
+        executionHistory.push_back(entry);
+
         if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
             this->sleep(sleepCmd->getTicks());
         } 
@@ -85,26 +97,23 @@ void Process::executeCurrentCommand() {
 }
 
 void Process::moveToNextLine() {
-    touch();
     if (executionStack.empty()) {
         currentState = FINISHED;
         return;
     }
 
-    // Advance the program counter for the top frame
     executionStack.back().pc++;
 
-    // Evaluate and unwind finished frames
     while (!executionStack.empty() && executionStack.back().pc >= static_cast<int>(executionStack.back().instructions.size())) {
         executionStack.back().repeatsLeft--;
 
         if (executionStack.back().repeatsLeft > 0) {
-            executionStack.back().pc = 0; // Reset loop back to its first instruction line
+            executionStack.back().pc = 0; 
             break; 
         } else {
-            executionStack.pop_back(); // This frame level is done. Pop it!
+            executionStack.pop_back(); 
             if (!executionStack.empty()) {
-                executionStack.back().pc++; // Move past the parent's FOR statement line
+                executionStack.back().pc++; 
             }
         }
     }
@@ -124,7 +133,6 @@ Process::ProcessState Process::getState() const { return currentState; }
 
 void Process::setState(ProcessState State) { 
     currentState = State; 
-    touch(); 
 }
 
 bool Process::isFinished() const {
@@ -132,52 +140,14 @@ bool Process::isFinished() const {
 }
 
 SymbolTable& Process::getSymbolTable() { return symbolTable; }
-
 int Process::getAssignedCore() const { return assignedCore; }
 
 void Process::setAssignedCore(int core) {
     assignedCore = core;
-    touch();
 }
 
 int Process::getLinesExecuted() const { return linesExecuted; }
 int Process::getTotalLines() const { return totalInstructions; }
-
-// =========================================================
-// COMPLEX DIAGNOSTIC METRICS
-// =========================================================
-
-std::string Process::getStartedAtString() const {
-    std::time_t timeValue = std::chrono::system_clock::to_time_t(startedAt);
-    std::tm localTime{};
-#if defined(_WIN32)
-    localtime_s(&localTime, &timeValue);
-#else
-    localtime_r(&timeValue, &localTime);
-#endif
-
-    std::ostringstream stream;
-    stream << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
-    return stream.str();
-}
-
-std::string Process::getLastUpdatedString() const {
-    std::time_t timeValue = std::chrono::system_clock::to_time_t(lastUpdatedAt);
-    std::tm localTime{};
-#if defined(_WIN32)
-    localtime_s(&localTime, &timeValue);
-#else
-    localtime_r(&timeValue, &localTime);
-#endif
-
-    std::ostringstream stream;
-    stream << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S");
-    return stream.str();
-}
-
-void Process::touch() {
-    lastUpdatedAt = std::chrono::system_clock::now();
-}
 
 int Process::getCurrentInstructionLine() const {
     if (!isStackInitialized && !commandList.empty()) {
@@ -205,31 +175,17 @@ int Process::getCurrentFrameInstructionCount() const {
     return static_cast<int>(currentFrame.instructions.size());
 }
 
-void Process::printExecutionLogs() const {
-    if (logs.empty()) {
-        std::cout << "  (No execution logs recorded yet for this process)\n";
-        return;
-    }
-    for (const auto& logEntry : logs) {
-        std::cout << "  [Log] " << logEntry << "\n";
-    }
-}
-
 // =========================================================
 // FLOW CONTROLS
 // =========================================================
 
 void Process::pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats) {
-    // pc is initialized to -1 because moveToNextLine() runs right after execute,
-    // which increments it back up to 0 for the subsequent cycle tick.
     executionStack.push_back({instructions, -1, repeats});
-    touch();
 }
 
 void Process::sleep(int ticks) {
     sleepTicksRemaining = ticks;
     currentState = WAITING; 
-    touch();
 }
 
 void Process::decrementSleepTicks() {
@@ -237,7 +193,21 @@ void Process::decrementSleepTicks() {
         sleepTicksRemaining--;
         if (sleepTicksRemaining == 0) {
             currentState = READY;
-            touch();
         }
     }
 }
+
+const std::vector<Process::LogEntry>& Process::getCommandLogs() const { 
+    return commandLogs; 
+}
+
+void Process::clearCommandLogs() {
+    commandLogs.clear();
+}
+
+// In Process.cpp
+const std::vector<Process::LogEntry>& Process::getExecutionHistory() const {
+    return executionHistory;
+}
+void Process::setRunStartTime(const std::string& time) { runStartTime = time; }
+std::string Process::getRunStartTime() const { return runStartTime; }

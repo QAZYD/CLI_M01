@@ -1,128 +1,123 @@
 #include "coreDependencies/RRScheduler.h"
 #include <iostream>
 
-RRScheduler::RRScheduler(int quantumCycles, int numCPUs, int delayPerExec) 
-    : isRunning(true), quantumLimit(quantumCycles), totalCPUs(numCPUs), delayPerExecution(delayPerExec) 
-{
-    // Allocate space for our virtual processors and their quantum clocks
-    cores.resize(totalCPUs, nullptr);
-    coreQuantumCounters.resize(totalCPUs, 0);
+RRScheduler::RRScheduler(int cores, int delayCycles, int quantum) 
+    : totalCores(cores), delayPerExec(delayCycles), timeQuantum(quantum), 
+      isRunning(false), cpuCycles(0), activeWorkerCount(0) {
+    if (totalCores <= 0) totalCores = 1; 
 }
 
-void RRScheduler::addProcess(std::shared_ptr<Process> process) {
-    std::lock_guard<std::mutex> lock(queueMutex);
-    process->setState(Process::READY);
-    readyQueue.push(process);
-    
-    std::cout << "[RR] Process " << process->getName() 
-              << " (PID: " << process->getPID() << ") entered the ready queue.\n";
+void RRScheduler::start() {
+    if (isRunning) return;
+    isRunning = true;
+
+    for (int i = 0; i < totalCores; ++i) {
+        coreThreads.push_back(std::thread(&RRScheduler::runLoop, this, i));
+    }
+    masterClockThread = std::thread(&RRScheduler::masterClockLoop, this);
 }
 
 void RRScheduler::stop() {
+    if (!isRunning) return;
     isRunning = false;
+    tickCv.notify_all();
+
+    if (masterClockThread.joinable()) masterClockThread.join();
+    for (auto& thread : coreThreads) {
+        if (thread.joinable()) thread.join();
+    }
+    coreThreads.clear();
 }
 
-void RRScheduler::run() {
-    std::cout << "[RR] Background Round Robin Scheduler Active. Cores: " << totalCPUs 
-              << " | Quantum: " << quantumLimit << " cycles | Delay: " << delayPerExecution << "ms\n";
+RRScheduler::~RRScheduler() {
+    stop();
+}
+
+void RRScheduler::pushProcess(std::shared_ptr<Process> process) {
+    std::lock_guard<std::mutex> lock(tickMutex);
+    readyQueue.push(process);
+}
+
+void RRScheduler::masterClockLoop() {
+    while (isRunning) {
+        {
+            std::unique_lock<std::mutex> lock(tickMutex);
+            tickCv.wait(lock, [this]() { 
+                return activeWorkerCount == 0 || !isRunning; 
+            });
+
+            if (!isRunning) break;
+            cpuCycles++;
+            activeWorkerCount = totalCores;
+        }
+        tickCv.notify_all();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+void RRScheduler::runLoop(int coreId) {
+    CoreState core;
+    int lastProcessedCycle = 0;
 
     while (isRunning) {
-        bool coreActivityThisCycle = false;
+        std::unique_lock<std::mutex> lock(tickMutex);
 
-        // ==========================================
-        // STEP 1: LIFECYCLE MANAGEMENT (Per Core)
-        // ==========================================
-        for (int i = 0; i < totalCPUs; ++i) {
-            
-            // Scenario A: The process on this core finished its script naturally
-            if (cores[i] && cores[i]->isFinished()) {
-                std::cout << "[RR] [Core " << i << "] Process " << cores[i]->getName() 
-                          << " [PID: " << cores[i]->getPID() << "] completed execution naturally.\n";
-                cores[i]->setAssignedCore(-1);
-                cores[i] = nullptr;
-            }
-            
-            // Scenario B: The process is still going, but its Quantum limit has run out!
-            else if (cores[i] && coreQuantumCounters[i] >= quantumLimit) {
-                std::cout << "[RR] [Core " << i << "] Quantum expired for Process " << cores[i]->getName() 
-                          << " [PID: " << cores[i]->getPID() << "]. Preempting.\n";
-                
-                // Evict the process and safely put it at the back of the ready line
-                {
-                    std::lock_guard<std::mutex> lock(queueMutex);
-                    cores[i]->setState(Process::READY);
-                    cores[i]->setAssignedCore(-1);
-                    readyQueue.push(cores[i]);
-                }
-                cores[i] = nullptr; // Free up the core slot
-            }
+        tickCv.wait(lock, [this, &lastProcessedCycle]() {
+            return cpuCycles > lastProcessedCycle || !isRunning;
+        });
 
-            // Scenario C: The core is currently empty (or was just emptied above). Pull new work!
-            if (cores[i] == nullptr) {
-                std::lock_guard<std::mutex> lock(queueMutex);
-                if (!readyQueue.empty()) {
-                    cores[i] = readyQueue.front();
-                    readyQueue.pop();
-                    
-                    cores[i]->setState(Process::RUNNING);
-                    cores[i]->setAssignedCore(i);
-                    coreQuantumCounters[i] = 0; // Reset the quantum usage clock for this core slot
-                    
-                    std::cout << "[RR] [Core " << i << "] Dispatching Process: " 
-                              << cores[i]->getName() << " [PID: " << cores[i]->getPID() << "]\n";
-                }
+        if (!isRunning) break;
+        lastProcessedCycle = cpuCycles;
+
+        // 1. Core Idle Check: Grab a process if empty
+        if (!core.currentProcess && !readyQueue.empty()) {
+            core.currentProcess = readyQueue.front();
+            readyQueue.pop();
+            
+            core.currentProcess->setAssignedCore(coreId);
+            if (core.currentProcess->getRunStartTime() == "N/A") {
+                core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
             }
+            core.remainingDelayCycles = 0; 
+            core.quantumUsed = 0; // Reset quantum on arrival
         }
 
-        // ==========================================
-        // STEP 2: PARALLEL COMMAND EXECUTION
-        // ==========================================
-        // Now that cores are balanced, tick EVERY active core forward by exactly ONE cycle
-        for (int i = 0; i < totalCPUs; ++i) {
-            if (cores[i] && !cores[i]->isFinished()) {
-                coreActivityThisCycle = true;
-                
-                // Check if the process is currently supposed to be sleeping
-                if (cores[i]->getState() == Process::WAITING) {
-                    
-                    cores[i]->decrementSleepTicks(); // Tick down remaining sleep time
-                    
-                    // If it's done sleeping, wake it back up for the next cycle
-                    if (cores[i]->getSleepTicksRemaining() <= 0) {
-                        cores[i]->setState(Process::RUNNING);
-                    }
-                    
-                    // Note: In RR, sleeping still uses up your time slice!
-                    coreQuantumCounters[i]++; 
-                    
-                } else {
-                    // Process is awake! Execute its current command normally
-                    std::cout << "  -> [Core " << i << "][PID " << cores[i]->getPID() << "] Executing Line " 
-                              << (coreQuantumCounters[i] + 1) << "/" << quantumLimit << "\n";
-                    
-                    cores[i]->executeCurrentCommand();
-                    cores[i]->moveToNextLine();
-                    
-                    // Advance this specific core's quantum usage record
-                    coreQuantumCounters[i]++;
-                }
-            }
-        }
+        // 2. Core Execution Step
+        if (core.currentProcess) {
+            // Track the time spent on core for this quantum
+            core.quantumUsed++;
 
-        // ==========================================
-        // STEP 3: SYSTEM PERFORMANCE TIMING
-        // ==========================================
-        if (coreActivityThisCycle) {
-            if (delayPerExecution == 0) {
-                IETThread::sleep(1); // Standard 1ms host fallback safety margin
+            if (core.remainingDelayCycles > 0) {
+                core.remainingDelayCycles--;
             } else {
-                IETThread::sleep(delayPerExecution); // Bound directly to your config string
+                core.currentProcess->executeCurrentCommand();
+                core.currentProcess->moveToNextLine();
+
+                if (core.currentProcess->isFinished()) {
+                    core.currentProcess = nullptr; // Task done
+                    core.quantumUsed = 0;
+                } 
+                // ROUND ROBIN PREEMPTION LOGIC
+                else if (core.quantumUsed >= timeQuantum) {
+                    core.currentProcess->setAssignedCore(-1); // Return to wait state
+                    readyQueue.push(core.currentProcess);     // Re-queue
+                    core.currentProcess = nullptr;            // Clear core
+                    core.quantumUsed = 0;                     // Reset counter
+                } 
+                else {
+                    core.remainingDelayCycles = delayPerExec; 
+                }
             }
-        } else {
-            // No processes are currently running across any cores. Hibernate.
-            IETThread::sleep(50);
+        }
+
+        activeWorkerCount--;
+        if (activeWorkerCount == 0) {
+            tickCv.notify_all();
         }
     }
+}
 
-    std::cout << "[RR] Background Round Robin Scheduler Thread Stopped.\n";
+int RRScheduler::getCPUCycles() const {
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(tickMutex));
+    return cpuCycles;
 }
