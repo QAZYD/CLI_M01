@@ -10,7 +10,7 @@
 
 namespace CommandGenerator {
 
-std::vector<std::shared_ptr<ICommand>> generateProgram(int totalLines) {
+std::vector<std::shared_ptr<ICommand>> generateProgram(int totalLines, std::string name) {
     std::vector<std::shared_ptr<ICommand>> program;
     
     std::random_device rd;
@@ -21,7 +21,7 @@ std::vector<std::shared_ptr<ICommand>> generateProgram(int totalLines) {
 
     while (generatedInstructions < remainingInstructions) {
         program.push_back(
-            generateRandomCommand(gen, 1, remainingInstructions, generatedInstructions)
+            generateRandomCommand(gen, 1, remainingInstructions, generatedInstructions, name)
         );
     }
 
@@ -32,7 +32,8 @@ std::shared_ptr<ICommand> generateRandomCommand(
     std::mt19937& gen, 
     int currentDepth, 
     int& remainingInstructions, 
-    int& generatedInstructions) 
+    int& generatedInstructions, 
+    std::string name) 
 {
     std::uniform_int_distribution<int> typeDist(0, 5);  
     std::uniform_int_distribution<int> tickDist(1, 10);  
@@ -63,7 +64,7 @@ std::shared_ptr<ICommand> generateRandomCommand(
 
         for (int i = 0; i < bodySize; ++i) {
             loopBody.push_back(
-                generateRandomCommand(gen, currentDepth + 1, remainingInstructions, generatedInstructions)
+                generateRandomCommand(gen, currentDepth + 1, remainingInstructions, generatedInstructions, name)
             );
         }
 
@@ -90,7 +91,7 @@ std::shared_ptr<ICommand> generateRandomCommand(
             default:
                 remainingInstructions--;
                 generatedInstructions++; 
-                return std::make_shared<PrintCommand>("mockVar");
+                return std::make_shared<PrintCommand>("Hello World from " + name);
         }
     }
 }

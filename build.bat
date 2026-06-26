@@ -2,6 +2,7 @@
 
 g++ main.cpp  ^
 ProcessControl.cpp  ^
+ProcessGenerator.cpp ^
 CommandProcessor.cpp ^
 configManager.cpp ^
 FCFSScheduler.cpp ^

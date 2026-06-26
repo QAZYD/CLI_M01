@@ -27,7 +27,7 @@ Process::Process(int pid, std::string name, int totalLines)
       totalInstructions(totalLines)
 {
     // Delegate the random layout construction entirely to our specialized generator
-    commandList = CommandGenerator::generateProgram(totalLines);
+    commandList = CommandGenerator::generateProgram(totalLines, name);
 }
 
 void Process::addCommand(std::shared_ptr<ICommand> command) {

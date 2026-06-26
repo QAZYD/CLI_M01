@@ -49,7 +49,7 @@ void ProcessGenerator::generatorLoop() {
 
         // 2. Use the group's advanced AST generator!
         uint32_t targetInstructions = sizeDist(gen);
-        std::vector<std::shared_ptr<ICommand>> generatedProgram = CommandGenerator::generateProgram(targetInstructions);
+        std::vector<std::shared_ptr<ICommand>> generatedProgram = CommandGenerator::generateProgram(targetInstructions, autoName);
         
         for (const auto& cmd : generatedProgram) {
             newProcess->addCommand(cmd);

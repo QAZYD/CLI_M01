@@ -117,7 +117,7 @@ void CommandProcessor::handleScreen_s(const std::string& processName) {
     auto newProc = std::make_shared<Process>(nextPID++, processName);
     
     // 3. Generate the advanced AST program and inject it into the process
-    std::vector<std::shared_ptr<ICommand>> generatedProgram = CommandGenerator::generateProgram(targetInstructions);
+    std::vector<std::shared_ptr<ICommand>> generatedProgram = CommandGenerator::generateProgram(targetInstructions, processName);
     for(const auto& cmd : generatedProgram) {
         newProc->addCommand(cmd);
     }
