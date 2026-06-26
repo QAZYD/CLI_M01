@@ -238,7 +238,7 @@ void CommandProcessor::handleReportUtil() {
 
     double cpuUtilization = totalCores > 0 ? (100.0 * usedCores / totalCores) : 0.0;
 
-    std::ofstream logFile("csopesy-log.txt", std::ios::app);
+    std::ofstream logFile("csopesy-log.txt");
     if (!logFile.is_open()) {
         std::cout << "  Error: Could not open or create 'csopesy-log.txt'.\n";
         return;
