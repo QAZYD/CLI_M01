@@ -60,7 +60,7 @@ void generateRandomCommandInto(
     std::uniform_int_distribution<int> tickDist(1, 10);  
     std::uniform_int_distribution<int> repeatDist(2, 4);
     std::uniform_int_distribution<int> sizeDist(2, 3);   
-    std::uniform_int_distribution<int> valDist(0, 50);
+    std::uniform_int_distribution<int> valDist(1, 50);
 
     int choice = typeDist(gen);
 

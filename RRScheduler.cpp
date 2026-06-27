@@ -48,6 +48,19 @@ void RRScheduler::masterClockLoop() {
 
             if (!isRunning) break;
             cpuCycles++;
+
+            // Update all sleeping processes during the clock tick phase
+            for (auto it = waitingList.begin(); it != waitingList.end(); ) {
+                (*it)->decrementSleepTicks(); 
+                
+                if ((*it)->getState() == Process::READY) {
+                    readyQueue.push(*it);       // Move back to ready queue
+                    it = waitingList.erase(it); // Remove from sleep tracking
+                } else {
+                    ++it;
+                }
+            }
+
             activeWorkerCount = totalCores;
         }
         tickCv.notify_all();
@@ -79,12 +92,11 @@ void RRScheduler::runLoop(int coreId) {
                 core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
             }
             core.remainingDelayCycles = 0; 
-            core.quantumUsed = 0; // Reset quantum on arrival
+            core.quantumUsed = 0; 
         }
 
         // 2. Core Execution Step
         if (core.currentProcess) {
-            // Track the time spent on core for this quantum
             core.quantumUsed++;
 
             if (core.remainingDelayCycles > 0) {
@@ -93,17 +105,26 @@ void RRScheduler::runLoop(int coreId) {
                 core.currentProcess->executeCurrentCommand();
                 core.currentProcess->moveToNextLine();
 
+                // Case A: Process finished execution entirely
                 if (core.currentProcess->isFinished()) {
-                    core.currentProcess = nullptr; // Task done
+                    core.currentProcess = nullptr; 
                     core.quantumUsed = 0;
                 } 
-                // ROUND ROBIN PREEMPTION LOGIC
-                else if (core.quantumUsed >= timeQuantum) {
-                    core.currentProcess->setAssignedCore(-1); // Return to wait state
-                    readyQueue.push(core.currentProcess);     // Re-queue
-                    core.currentProcess = nullptr;            // Clear core
-                    core.quantumUsed = 0;                     // Reset counter
+                // Case B: Process explicitly called SLEEP (Relinquish Core)
+                else if (core.currentProcess->getState() == Process::WAITING) {
+                    core.currentProcess->setAssignedCore(-1);
+                    waitingList.push_back(core.currentProcess); 
+                    core.currentProcess = nullptr; // Evict from core
+                    core.quantumUsed = 0;          // Clear out the quantum counter
                 } 
+                // Case C: Round-Robin Time Quantum Expiration (Preemption)
+                else if (core.quantumUsed >= timeQuantum) {
+                    core.currentProcess->setAssignedCore(-1); 
+                    readyQueue.push(core.currentProcess);     
+                    core.currentProcess = nullptr; 
+                    core.quantumUsed = 0; 
+                } 
+                // Case D: Retain process, enforce regular busy-wait delay execution step
                 else {
                     core.remainingDelayCycles = delayPerExec; 
                 }

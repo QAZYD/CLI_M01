@@ -43,6 +43,7 @@ private:
     std::thread masterClockThread;
 
     std::queue<std::shared_ptr<Process>> readyQueue;
+    std::vector<std::shared_ptr<Process>> waitingList;
     
     // Synchronization primitives for the cycle ticks
     std::mutex tickMutex;

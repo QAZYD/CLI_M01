@@ -47,13 +47,12 @@ void FCFSScheduler::pushProcess(std::shared_ptr<Process> process) {
     readyQueue.push(process);
 }
 
-// --- THE MASTER CLOCK LOOP (Your Pseudocode) ---
+// --- THE MASTER CLOCK LOOP  ---
 void FCFSScheduler::masterClockLoop() {
     while (isRunning) {
         {
             std::unique_lock<std::mutex> lock(tickMutex);
             
-            // Wait until all core threads have finished processing the current cycle
             tickCv.wait(lock, [this]() { 
                 return activeWorkerCount == 0 || !isRunning; 
             });
@@ -63,14 +62,23 @@ void FCFSScheduler::masterClockLoop() {
             // Increment CPU cycles exactly like your pseudocode
             cpuCycles++;
 
+            //  THIS BLOCK: Update all sleeping processes
+            for (auto it = waitingList.begin(); it != waitingList.end(); ) {
+                (*it)->decrementSleepTicks(); // Reduces tick and changes state to READY if 0
+                
+                if ((*it)->getState() == Process::READY) {
+                    readyQueue.push(*it);       // Put back into the execution pool
+                    it = waitingList.erase(it); // Remove from tracking list
+                } else {
+                    ++it;
+                }
+            }
+
             // Reset worker status flags for the new cycle
             activeWorkerCount = totalCores;
         }
 
-        // Broadcast to all multi-threaded cores that a new cycle has arrived
         tickCv.notify_all();
-        
-        // Optional: Throttle the simulation speed slightly so it doesn't max out your host system
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
@@ -104,22 +112,27 @@ void FCFSScheduler::runLoop(int coreId) {
 
         // 2. Core Execution Step
         if (core.currentProcess) {
-            if (core.remainingDelayCycles > 0) {
-                // Scheme: "Busy-waiting wherein the process remains in the CPU"
-                core.remainingDelayCycles--;
-            } else {
-                // Scheme: "If zero, each instruction is executed per CPU cycle"
-                core.currentProcess->executeCurrentCommand();
-                core.currentProcess->moveToNextLine();
+        if (core.remainingDelayCycles > 0) {
+            core.remainingDelayCycles--;
+        } else {
+            core.currentProcess->executeCurrentCommand();
+            core.currentProcess->moveToNextLine();
 
-                if (core.currentProcess->isFinished()) {
-                    core.currentProcess = nullptr; // Process completed, clear core
-                } else {
-                    core.remainingDelayCycles = delayPerExec; 
-                }
+            if (core.currentProcess->isFinished()) {
+                core.currentProcess = nullptr; // Process completed
+            } 
+            //THIS CHECK FOR SLEEP RELINQUISHMENT
+            else if (core.currentProcess->getState() == Process::WAITING) {
+                // Remove the process from the core immediately, freeing it up
+                core.currentProcess->setAssignedCore(-1);
+                waitingList.push_back(core.currentProcess);
+                core.currentProcess = nullptr; 
+            } 
+            else {
+                core.remainingDelayCycles = delayPerExec; 
             }
         }
-
+    }
         // Signal back to the master clock that this core thread is done for this cycle
         activeWorkerCount--;
         if (activeWorkerCount == 0) {

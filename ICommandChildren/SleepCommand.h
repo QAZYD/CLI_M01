@@ -16,6 +16,6 @@ public:
 
     // --- ADDED TOSTRING IMPLEMENTATION ---
     std::string toString() const override {
-        return "SLEEP" + std::to_string(static_cast<int>(ticks));
+        return "SLEEP " + std::to_string(static_cast<int>(ticks));
     }
 };

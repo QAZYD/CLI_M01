@@ -23,8 +23,6 @@ public:
     // Validates inputs and handles pure invocation mechanics
     bool execute(const std::string& rawInput, const InitializeCommand& initHandler, std::mt19937& gen);
 
-    // Exposes active process handles to your scheduler loop
-
 
     void cleanupFinishedProcesses();
 

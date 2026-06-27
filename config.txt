@@ -1,10 +1,10 @@
 //Number of CPUs available. The range is [1, 128].
 num-cpu 12
 //The scheduler algorithm: “fcfs” or “rr”.
-scheduler "rr"
+scheduler "fcfs"
 //The time slice is given for each processor if a round-robin scheduler is used
 // Has no effect on other schedulers. The range is [1, 2^32].
-quantum-cycles 2
+quantum-cycles 10
 //The frequency of generating processes in the “scheduler-start” command in CPU cycles 
 //The range is [1, 2^32] If one, a new process is generated at the end of each CPU cycle.
 batch-process-freq 150
@@ -16,4 +16,4 @@ max-ins 1000
 //scheme wherein the process remains in the CPU. The range is [0, 232] If zero, 
 //each instruction is executed per CPU cycle.
 delay-per-exec 20
-varConfig 0
+varConfig 1 

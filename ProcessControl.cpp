@@ -47,6 +47,11 @@ std::string Process::captureCurrentTimestamp() const {
 }
 
 void Process::executeCurrentCommand() {
+
+    if (currentState == WAITING || currentState == FINISHED) {
+        return;
+    }
+    
     if (!isStackInitialized) {
         if (!commandList.empty()) {
             executionStack.push_back({commandList, 0, 1});
@@ -76,7 +81,8 @@ void Process::executeCurrentCommand() {
             currentCmd->toString(),
             exactTime,
             currentLine,
-            limitLines
+            limitLines,
+            assignedCore
         };
 
         commandLogs.push_back(entry);

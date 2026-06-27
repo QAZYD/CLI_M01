@@ -21,6 +21,7 @@ public:
         std::string timestamp;
         int currentLine;    
         int totalLines;
+        int coreId;;
     };
 
     // Tracks an isolated block of instructions (The main script or a loop body)

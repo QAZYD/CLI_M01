@@ -1,19 +1,13 @@
 CPU Utilization: 0%
-Cores Used: 0 | Cores Available: 4
+Cores Used: 0 | Cores Available: 12
 -------------------------------------------------------
 Running Processes:
 -------------------------------------------------------
 Waiting in Queue:
 -------------------------------------------------------
 Finished Processes:
-dummy_p1 (06/26/2026 07:30:13 PM) FINISHED <705/705>
-dummy_p2 (06/26/2026 07:30:14 PM) FINISHED <779/779>
-dummy_p3 (06/26/2026 07:30:15 PM) FINISHED <593/593>
-dummy_p4 (06/26/2026 07:30:16 PM) FINISHED <936/936>
-dummy_p5 (06/26/2026 07:30:24 PM) FINISHED <822/822>
-dummy_p6 (06/26/2026 07:30:24 PM) FINISHED <271/271>
-dummy_p7 (06/26/2026 07:30:26 PM) FINISHED <309/309>
-dummy_p8 (06/26/2026 07:30:29 PM) FINISHED <876/876>
-dummy_p9 (06/26/2026 07:30:31 PM) FINISHED <429/429>
-dummy_p10 (06/26/2026 07:30:31 PM) FINISHED <984/984>
-dummy_p11 (06/26/2026 07:30:37 PM) FINISHED <592/592>
+dummy_p1 (06/27/2026 10:27:55 AM) FINISHED <359/359>
+dummy_p2 (06/27/2026 10:27:56 AM) FINISHED <938/938>
+dummy_p3 (06/27/2026 10:27:58 AM) FINISHED <527/527>
+dummy_p4 (06/27/2026 10:28:00 AM) FINISHED <956/956>
+dummy_p5 (06/27/2026 10:28:03 AM) FINISHED <858/858>
