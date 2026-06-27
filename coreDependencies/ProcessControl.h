@@ -55,7 +55,7 @@ public:
     // =========================================================
     int getLinesExecuted() const;
     int getTotalLines() const;
-    int getSleepTicksRemaining() const { return sleepTicksRemaining; } // Kept inline (not in .cpp)
+    int getSleepTicksRemaining() const { return sleepTicksRemaining; } 
     int getAssignedCore() const;
     void setAssignedCore(int core);
 
@@ -90,7 +90,7 @@ private:
     std::vector<LogEntry> commandLogs;
     std::vector<LogEntry> executionHistory;
     
-    // Core VM / Execution Stack
+    // Execution Stack
     std::vector<ExecutionFrame> executionStack;
     std::vector<std::shared_ptr<ICommand>> commandList; 
     SymbolTable symbolTable;

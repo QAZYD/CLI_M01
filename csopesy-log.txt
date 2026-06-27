@@ -1,13 +1,171 @@
-CPU Utilization: 0%
-Cores Used: 0 | Cores Available: 12
+CPU Utilization: 100%
+Cores Used: 12 | Cores Available: 0
 -------------------------------------------------------
 Running Processes:
+dummy_p18 (06/27/2026 11:40:55 AM) core:6 <180/789> 
+dummy_p20 (06/27/2026 11:40:59 AM) core:5 <231/692> 
+dummy_p22 (06/27/2026 11:41:05 AM) core:3 <302/949> 
+dummy_p49 (06/27/2026 11:42:11 AM) core:8 <111/950> 
+dummy_p67 (06/27/2026 11:42:59 AM) core:10 <127/759> 
+dummy_p98 (06/27/2026 11:44:20 AM) core:9 <134/674> 
+dummy_p101 (06/27/2026 11:44:25 AM) core:11 <22/417> 
+dummy_p117 (06/27/2026 11:45:03 AM) core:0 <132/431> 
+dummy_p122 (06/27/2026 11:45:14 AM) core:4 <34/552> 
+dummy_p131 (06/27/2026 11:45:35 AM) core:1 <10/891> 
+dummy_p153 (06/27/2026 11:46:31 AM) core:2 <22/611> 
+dummy_p154 (06/27/2026 11:46:37 AM) core:7 <4/655> 
 -------------------------------------------------------
 Waiting in Queue:
+dummy_p1 (WAITING) <279/582> 
+dummy_p2 (WAITING) <443/734> 
+dummy_p4 (WAITING) <387/520> 
+dummy_p5 (WAITING) <364/772> 
+dummy_p6 (WAITING) <383/757> 
+dummy_p7 (WAITING) <231/304> 
+dummy_p8 (WAITING) <360/672> 
+dummy_p12 (WAITING) <295/834> 
+dummy_p13 (WAITING) <198/976> 
+dummy_p14 (WAITING) <196/940> 
+dummy_p15 (WAITING) <227/955> 
+dummy_p16 (WAITING) <175/337> 
+dummy_p17 (WAITING) <257/519> 
+dummy_p19 (WAITING) <185/500> 
+dummy_p21 (WAITING) <282/554> 
+dummy_p24 (WAITING) <138/912> 
+dummy_p25 (WAITING) <141/839> 
+dummy_p26 (WAITING) <190/549> 
+dummy_p28 (WAITING) <120/439> 
+dummy_p29 (WAITING) <143/230> 
+dummy_p30 (WAITING) <186/839> 
+dummy_p31 (WAITING) <148/293> 
+dummy_p32 (WAITING) <181/381> 
+dummy_p33 (WAITING) <155/846> 
+dummy_p34 (WAITING) <70/652> 
+dummy_p35 (WAITING) <146/534> 
+dummy_p36 (WAITING) <117/303> 
+dummy_p37 (WAITING) <92/492> 
+dummy_p38 (WAITING) <163/567> 
+dummy_p39 (WAITING) <146/505> 
+dummy_p40 (WAITING) <165/280> 
+dummy_p41 (WAITING) <152/977> 
+dummy_p42 (WAITING) <148/857> 
+dummy_p43 (WAITING) <94/320> 
+dummy_p44 (WAITING) <79/342> 
+dummy_p45 (WAITING) <148/625> 
+dummy_p46 (WAITING) <130/226> 
+dummy_p47 (WAITING) <133/499> 
+dummy_p48 (WAITING) <121/418> 
+dummy_p50 (WAITING) <109/443> 
+dummy_p51 (WAITING) <91/635> 
+dummy_p52 (WAITING) <103/757> 
+dummy_p53 (WAITING) <207/286> 
+dummy_p54 (WAITING) <99/660> 
+dummy_p55 (WAITING) <118/219> 
+dummy_p56 (WAITING) <98/609> 
+dummy_p57 (WAITING) <93/635> 
+dummy_p58 (WAITING) <100/313> 
+dummy_p59 (WAITING) <60/927> 
+dummy_p60 (WAITING) <71/692> 
+dummy_p61 (WAITING) <43/477> 
+dummy_p62 (WAITING) <58/899> 
+dummy_p63 (WAITING) <97/491> 
+dummy_p64 (WAITING) <64/242> 
+dummy_p65 (WAITING) <111/784> 
+dummy_p66 (WAITING) <30/676> 
+dummy_p68 (WAITING) <217/259> 
+dummy_p69 (WAITING) <69/423> 
+dummy_p70 (WAITING) <47/443> 
+dummy_p71 (WAITING) <94/677> 
+dummy_p72 (WAITING) <137/917> 
+dummy_p73 (WAITING) <130/592> 
+dummy_p74 (WAITING) <71/424> 
+dummy_p75 (WAITING) <29/276> 
+dummy_p76 (WAITING) <95/705> 
+dummy_p77 (WAITING) <75/382> 
+dummy_p78 (WAITING) <62/982> 
+dummy_p79 (WAITING) <35/786> 
+dummy_p80 (WAITING) <30/256> 
+dummy_p81 (WAITING) <102/361> 
+dummy_p82 (WAITING) <87/589> 
+dummy_p83 (WAITING) <93/654> 
+dummy_p84 (WAITING) <38/827> 
+dummy_p85 (WAITING) <47/963> 
+dummy_p86 (WAITING) <51/469> 
+dummy_p87 (WAITING) <41/823> 
+dummy_p88 (WAITING) <115/784> 
+dummy_p89 (WAITING) <72/759> 
+dummy_p90 (WAITING) <79/832> 
+dummy_p91 (WAITING) <117/968> 
+dummy_p92 (WAITING) <52/536> 
+dummy_p93 (WAITING) <75/904> 
+dummy_p94 (WAITING) <51/258> 
+dummy_p95 (WAITING) <70/697> 
+dummy_p96 (WAITING) <66/213> 
+dummy_p97 (WAITING) <32/735> 
+dummy_p99 (WAITING) <68/879> 
+dummy_p100 (WAITING) <67/581> 
+dummy_p102 (WAITING) <105/711> 
+dummy_p103 (WAITING) <95/604> 
+dummy_p104 (WAITING) <64/657> 
+dummy_p105 (WAITING) <33/311> 
+dummy_p106 (WAITING) <33/817> 
+dummy_p107 (WAITING) <62/541> 
+dummy_p108 (WAITING) <27/453> 
+dummy_p109 (WAITING) <71/230> 
+dummy_p110 (WAITING) <45/284> 
+dummy_p111 (WAITING) <79/899> 
+dummy_p112 (WAITING) <20/940> 
+dummy_p113 (WAITING) <25/362> 
+dummy_p114 (WAITING) <27/427> 
+dummy_p115 (WAITING) <72/807> 
+dummy_p116 (WAITING) <17/411> 
+dummy_p118 (WAITING) <31/1000> 
+dummy_p119 (WAITING) <30/644> 
+dummy_p120 (WAITING) <21/734> 
+dummy_p121 (WAITING) <25/578> 
+dummy_p123 (WAITING) <28/934> 
+dummy_p124 (WAITING) <22/980> 
+dummy_p125 (WAITING) <19/900> 
+dummy_p126 (WAITING) <37/565> 
+dummy_p127 (WAITING) <35/779> 
+dummy_p128 (WAITING) <17/608> 
+dummy_p129 (WAITING) <9/600> 
+dummy_p130 (WAITING) <18/654> 
+dummy_p132 (WAITING) <46/266> 
+dummy_p133 (WAITING) <13/266> 
+dummy_p134 (WAITING) <14/686> 
+dummy_p135 (WAITING) <19/576> 
+dummy_p136 (WAITING) <12/556> 
+dummy_p137 (WAITING) <10/246> 
+dummy_p138 (WAITING) <19/443> 
+dummy_p139 (WAITING) <44/330> 
+dummy_p140 (WAITING) <14/225> 
+dummy_p141 (WAITING) <17/822> 
+dummy_p142 (WAITING) <9/893> 
+dummy_p143 (WAITING) <11/222> 
+dummy_p144 (WAITING) <41/973> 
+dummy_p145 (WAITING) <14/421> 
+dummy_p146 (WAITING) <15/947> 
+dummy_p147 (WAITING) <13/570> 
+dummy_p148 (WAITING) <1/321> 
+dummy_p149 (WAITING) <7/510> 
+dummy_p150 (WAITING) <1/573> 
+dummy_p151 (WAITING) <15/599> 
+dummy_p152 (WAITING) <1/278> 
+dummy_p155 (WAITING) <0/353> 
+dummy_p156 (WAITING) <0/784> 
+dummy_p157 (WAITING) <0/988> 
+dummy_p158 (WAITING) <0/681> 
+dummy_p159 (WAITING) <0/579> 
+dummy_p160 (WAITING) <0/512> 
+dummy_p161 (WAITING) <0/568> 
+dummy_p162 (WAITING) <0/531> 
+dummy_p163 (WAITING) <0/775> 
 -------------------------------------------------------
 Finished Processes:
-dummy_p1 (06/27/2026 10:27:55 AM) FINISHED <359/359>
-dummy_p2 (06/27/2026 10:27:56 AM) FINISHED <938/938>
-dummy_p3 (06/27/2026 10:27:58 AM) FINISHED <527/527>
-dummy_p4 (06/27/2026 10:28:00 AM) FINISHED <956/956>
-dummy_p5 (06/27/2026 10:28:03 AM) FINISHED <858/858>
+dummy_p3 (06/27/2026 11:40:18 AM) FINISHED <255/255>
+dummy_p9 (06/27/2026 11:40:33 AM) FINISHED <400/400>
+dummy_p10 (06/27/2026 11:40:35 AM) FINISHED <343/343>
+dummy_p11 (06/27/2026 11:40:37 AM) FINISHED <239/239>
+dummy_p23 (06/27/2026 11:41:07 AM) FINISHED <209/209>
+dummy_p27 (06/27/2026 11:41:19 AM) FINISHED <277/277>

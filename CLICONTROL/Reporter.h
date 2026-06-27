@@ -1,7 +1,7 @@
 #include "../coreDependencies/FCFSScheduler.h"
 #include "ScreenSpawnerCommand.h"
 #include <iostream>
-#include <ostream> // Required for ostream
+#include <ostream> 
 #include <set>
 
 namespace Reporter {

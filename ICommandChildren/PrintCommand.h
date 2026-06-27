@@ -16,7 +16,7 @@ public:
     void execute(SymbolTable& table) override {
         // FIX: Remove std::cout entirely.
         // The background thread will now execute this command silently.
-        // If you ever need to perform an internal state change, do it here.
+        
     }
 
     // --- TOSTRING IMPLEMENTATION ---

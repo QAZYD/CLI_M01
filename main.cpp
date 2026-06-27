@@ -61,7 +61,7 @@ int main() {
                 std::cout << "Scheduler (" << config.scheduler << ") activated.\n";
             }
         }
-        // --- NEW COMMAND: SCHEDULER-START ---
+        // SCHEDULER-START ---
         else if (userInput == "scheduler-start") {
             if (!scheduler) {
                 std::cout << "Error: System not initialized. Please run 'initialize' first.\n";
@@ -88,7 +88,7 @@ int main() {
                         lastTriggeredCycle = currentCycles - (currentCycles % batchProcessFreq);
                         generatedProcessCount++;
 
-                        // Build command parameter string matching your screen -s syntax rule
+                        // Build command parameter string matching screen -s syntax rule
                         std::string mockCommand = "screen -s dummy_p" + std::to_string(generatedProcessCount);
 
                         // Safe-guard name validation tracking list
@@ -120,7 +120,7 @@ int main() {
             std::cout << "Automated test generation started. (Generating 1 process every " 
                       << batchProcessFreq << " CPU ticks)\n";
         }
-        // --- NEW COMMAND: SCHEDULER-STOP ---
+        // SCHEDULER-STOP ---
         else if (userInput == "scheduler-stop") {
             if (!isGeneratingBatch) {
                 std::cout << "Test process generation is not running.\n";

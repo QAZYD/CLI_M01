@@ -26,7 +26,6 @@ namespace ProcessLogger {
                       << "<" << logEntry.commandText << ">\n";
         }
 
-        // Keep it self-flushing so the next tick starts clean
-    
+
     }
 }
