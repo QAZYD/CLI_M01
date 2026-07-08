@@ -16,4 +16,10 @@ max-ins 50
 //scheme wherein the process remains in the CPU. The range is [0, 232] If zero, 
 //each instruction is executed per CPU cycle.
 delay-per-exec 20
+//Maximum memory available in bytes
+max-overall-mem 16384
+//The size of memory in bytes per frame. This is also the memory size per page. 
+mem-per-frame 16
+// Let P be the number of pages required by a process and M is the rolled value between min mem-per-proc and max-mem-proc. P can be computed as M/ mem-per-frame.
+mem-per-proc 4096
 varConfig 0

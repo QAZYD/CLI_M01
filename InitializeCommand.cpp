@@ -39,6 +39,9 @@ void InitializeCommand::printConfigSummary() const {
     std::cout << "  Min Instructions     : " << loadedConfig.minIns << "\n";
     std::cout << "  Max Instructions     : " << loadedConfig.maxIns << "\n";
     std::cout << "  Delay Per Execution  : " << loadedConfig.delayPerExec << "ms\n";
+    std::cout << "  Max Overall Mem      : " << loadedConfig.maxOverallMem << "\n";
+    std::cout << "  Mem Per Frame        : " << loadedConfig.memPerFrame << "\n";
+    std::cout << "  Mem per proc         : " << loadedConfig.memPerProc << "\n";
     std::cout << "  Will print var       : " << loadedConfig.varPrint << "\n";
     std::cout << "-----------------------------------------\n";
 }
