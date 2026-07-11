@@ -22,6 +22,7 @@ int main() {
     ScreenSpawnerCommand spawnerHandler; 
     
     std::unique_ptr<IScheduler> scheduler = nullptr;
+    std::unique_ptr<MemoryManager> memoryManager = nullptr;
     
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -48,10 +49,12 @@ int main() {
             if (initHandler.execute()) {
                 const auto& config = initHandler.getConfig();
                 batchProcessFreq = config.batchProcessFreq;
+
+                memoryManager = std::make_unique<MemoryManager>(config.maxOverallMem, config.memPerFrame, config.memPerProc);
                 
                 // --- DYNAMIC SCHEDULER SELECTION ---
                 if (config.scheduler == "rr") {
-                    scheduler = std::make_unique<RRScheduler>(config.numCpu, config.delayPerExec, config.quantumCycles);
+                    scheduler = std::make_unique<RRScheduler>(config.numCpu, config.delayPerExec, config.quantumCycles, *memoryManager);
                 } else {
                     // Default to FCFS
                     scheduler = std::make_unique<FCFSScheduler>(config.numCpu, config.delayPerExec);

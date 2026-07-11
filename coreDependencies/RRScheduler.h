@@ -9,11 +9,12 @@
 #include <memory>
 #include "IScheduler.h"
 #include "ProcessControl.h" 
+#include "MemoryManager.h"
 
 class RRScheduler : public IScheduler{
 public:
     // Added timeQuantum to constructor parameters
-    RRScheduler(int cores, int delayCycles, int timeQuantum);
+    RRScheduler(int cores, int delayCycles, int timeQuantum, MemoryManager& memoryManager);
     ~RRScheduler();
 
     void start() override;
@@ -38,6 +39,8 @@ private:
     int timeQuantum;    // Maximum cycles a process can hold the CPU before preemption
     bool isRunning;
     int cpuCycles;      // Central tick counter
+
+    MemoryManager& memoryManager;
 
     std::vector<std::thread> coreThreads;
     std::thread masterClockThread;

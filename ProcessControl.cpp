@@ -17,6 +17,7 @@ Process::Process(int pid, std::string name, int totalLines,  std::mt19937& gen, 
       name(name), 
       currentState(READY), 
       isStackInitialized(false), 
+      inMemory(false),
       sleepTicksRemaining(0), 
       linesExecuted(0), 
       assignedCore(-1), 
@@ -217,3 +218,11 @@ const std::vector<Process::LogEntry>& Process::getExecutionHistory() const {
 }
 void Process::setRunStartTime(const std::string& time) { runStartTime = time; }
 std::string Process::getRunStartTime() const { return runStartTime; }
+
+bool Process::isInMemory() const {
+    return inMemory;
+}
+
+void Process::setInMemory(bool value) {
+    inMemory = value;
+}

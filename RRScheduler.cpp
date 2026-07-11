@@ -1,8 +1,8 @@
 #include "coreDependencies/RRScheduler.h"
 #include <iostream>
 
-RRScheduler::RRScheduler(int cores, int delayCycles, int quantum) 
-    : totalCores(cores), delayPerExec(delayCycles), timeQuantum(quantum), 
+RRScheduler::RRScheduler(int cores, int delayCycles, int quantum, MemoryManager& memoryManager) 
+    : totalCores(cores), delayPerExec(delayCycles), timeQuantum(quantum), memoryManager(memoryManager),
       isRunning(false), cpuCycles(0), activeWorkerCount(0) {
     if (totalCores <= 0) totalCores = 1; 
 }
@@ -49,6 +49,12 @@ void RRScheduler::masterClockLoop() {
             if (!isRunning) break;
             cpuCycles++;
 
+            // Generate snapshot every N cycles
+            if (cpuCycles % 100 == 0) {
+                memoryManager.generateMemorySnapshot(cpuCycles);
+            }
+
+
             // Update all sleeping processes during the clock tick phase
             for (auto it = waitingList.begin(); it != waitingList.end(); ) {
                 (*it)->decrementSleepTicks(); 
@@ -84,17 +90,40 @@ void RRScheduler::runLoop(int coreId) {
 
         // 1. Core Idle Check: Grab a process if empty
         if (!core.currentProcess && !readyQueue.empty()) {
-            core.currentProcess = readyQueue.front();
+            auto process = readyQueue.front();
             readyQueue.pop();
-            
-            core.currentProcess->setAssignedCore(coreId);
-            if (core.currentProcess->getRunStartTime() == "N/A") {
-                core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
-            }
-            core.remainingDelayCycles = 0; 
-            core.quantumUsed = 0; 
-        }
 
+            // Allocate memory only once
+            if (!process->isInMemory())
+            {
+                if (!memoryManager.allocate(process->getPID()))
+                {
+                    // Memory full, try again later
+                    readyQueue.push(process);
+                    process = nullptr;
+                }
+                else
+                {
+                    process->setInMemory(true);
+                }
+            }
+
+            if (process)
+            {
+                core.currentProcess = process;
+
+                core.currentProcess->setAssignedCore(coreId);
+
+                if (core.currentProcess->getRunStartTime() == "N/A")
+                {
+                    core.currentProcess->setRunStartTime(
+                        core.currentProcess->captureCurrentTimestamp());
+                }
+
+                core.remainingDelayCycles = 0;
+                core.quantumUsed = 0;
+            }
+        }
         // 2. Core Execution Step
         if (core.currentProcess) {
             core.quantumUsed++;
@@ -107,6 +136,14 @@ void RRScheduler::runLoop(int coreId) {
 
                 // Case A: Process finished execution entirely
                 if (core.currentProcess->isFinished()) {
+                    // release the core
+                    core.currentProcess->setAssignedCore(-1);
+
+                    // free its memory
+                    if (core.currentProcess->isInMemory()) {
+                        memoryManager.deallocate(core.currentProcess->getPID());
+                        core.currentProcess->setInMemory(false);
+                    }
                     core.currentProcess = nullptr; 
                     core.quantumUsed = 0;
                 } 
