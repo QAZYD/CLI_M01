@@ -15,5 +15,10 @@ struct Config {
 
     uint32_t delayPerExec;
 
+    uint32_t maxoverallMem;
+    uint32_t memperframe;
+    uint32_t minmemperproc;
+    uint32_t maxmemperproc;
+
     bool varPrint;
 };

@@ -6,6 +6,8 @@
 #include <chrono>
 #include "SymbolTable.h"
 #include "ICommand.h"
+#include  "../memoryControl/memoryStructures.h"
+#include "../memoryControl/memoryManager.h"
 
 class Process {
 public:
@@ -13,7 +15,8 @@ public:
         READY,
         RUNNING,
         WAITING,
-        FINISHED
+        FINISHED,
+        MEMORY_VIOLATION
     };
 
     struct LogEntry {
@@ -81,6 +84,22 @@ public:
     void setRunStartTime(const std::string& time);
     std::string getRunStartTime() const;
 
+    // --- ADDED MEMORY GETTERS & SETTERS ---
+    uint32_t getMemorySize() const { return memorySize; }
+    std::vector<PageTableEntry>& getPageTable() { return pageTable; }
+
+    std::string getErrorTimestamp() const { return errorTimestamp; }
+    uint16_t getInvalidAddress() const { return invalidAddress; }
+    
+    void triggerMemoryViolation(uint16_t address, const std::string& timestamp) {
+        currentState = MEMORY_VIOLATION;
+        invalidAddress = address;
+        errorTimestamp = timestamp;
+    }
+
+    // Pass MemoryManager into execution cycle
+    void executeCurrentCommand(MemoryManager& memoryManager);
+
 private:
     // Identity & State
     int pid;
@@ -104,4 +123,11 @@ private:
     std::vector<std::string> logs;
     std::chrono::system_clock::time_point startedAt;
     std::chrono::system_clock::time_point lastUpdatedAt;
+
+    // --- NEW MEMORY FIELDS ---
+    uint32_t memorySize;                   // Allocated size (e.g. 256, 512, 1024)
+    std::vector<PageTableEntry> pageTable; // Per-process Page Table
+    
+    uint16_t invalidAddress = 0;           // Address that caused violation
+    std::string errorTimestamp = "";       // Timestamp when violation occurred[cite: 1]
 };
