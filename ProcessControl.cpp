@@ -6,13 +6,14 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <iostream>
 #include <algorithm>
 
 // =========================================================
 // LIFECYCLE & CORE EXECUTION
 // =========================================================
 
-Process::Process(int pid, std::string name, int totalLines,  std::mt19937& gen, bool varPrint)
+Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, bool varPrint)
     : pid(pid), 
       name(name), 
       currentState(READY), 
@@ -21,8 +22,14 @@ Process::Process(int pid, std::string name, int totalLines,  std::mt19937& gen, 
       linesExecuted(0), 
       assignedCore(-1), 
       runStartTime("N/A"),
-      totalInstructions(totalLines)
+      totalInstructions(totalLines),
+      memorySize(4096),            // Default memory allocation (4096 bytes)
+      invalidAddress(0),
+      errorTimestamp("")
 {
+    startedAt = std::chrono::system_clock::now();
+    lastUpdatedAt = startedAt;
+
     commandList = CommandGenerator::generateProgram(totalLines, name, gen, varPrint);
 }
 
@@ -46,11 +53,17 @@ std::string Process::captureCurrentTimestamp() const {
     return stream.str();
 }
 
-void Process::executeCurrentCommand() {
+void Process::touch() {
+    lastUpdatedAt = std::chrono::system_clock::now();
+}
 
-    if (currentState == WAITING || currentState == FINISHED) {
+// Legacy / Default Execution Call
+void Process::executeCurrentCommand() {
+    if (currentState == WAITING || currentState == FINISHED || currentState == MEMORY_VIOLATION) {
         return;
     }
+
+    touch();
     
     if (!isStackInitialized) {
         if (!commandList.empty()) {
@@ -102,6 +115,64 @@ void Process::executeCurrentCommand() {
     }
 }
 
+// MemoryManager Integrated Execution Call
+void Process::executeCurrentCommand(MemoryManager& memoryManager) {
+    if (currentState == WAITING || currentState == FINISHED || currentState == MEMORY_VIOLATION) {
+        return;
+    }
+
+    touch();
+
+    if (!isStackInitialized) {
+        if (!commandList.empty()) {
+            executionStack.push_back({commandList, 0, 1});
+        }
+        isStackInitialized = true;
+    }
+
+    if (linesExecuted >= totalInstructions || executionStack.empty()) {
+        currentState = FINISHED;
+        return;
+    }
+
+    if (currentState == READY) {
+        currentState = RUNNING;
+    }
+
+    auto& currentFrame = executionStack.back();
+    if (currentFrame.pc >= 0 && currentFrame.pc < static_cast<int>(currentFrame.instructions.size())) {
+        auto currentCmd = currentFrame.instructions[currentFrame.pc];
+        linesExecuted++;
+
+        std::string exactTime = captureCurrentTimestamp();
+        int currentLine = getCurrentInstructionLine(); 
+        int limitLines = getTotalLines();
+
+        LogEntry entry = {
+            currentCmd->toString(),
+            exactTime,
+            currentLine,
+            limitLines,
+            assignedCore
+        };
+
+        commandLogs.push_back(entry);
+        executionHistory.push_back(entry);
+
+        if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
+            this->sleep(sleepCmd->getTicks());
+        } 
+        else if (auto forCmd = std::dynamic_pointer_cast<ForCommand>(currentCmd)) {
+            this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
+        } 
+        else {
+            currentCmd->execute(*this, memoryManager);
+        }
+    } else {
+        currentState = FINISHED;
+    }
+}
+
 void Process::moveToNextLine() {
     if (executionStack.empty()) {
         currentState = FINISHED;
@@ -130,7 +201,7 @@ void Process::moveToNextLine() {
 }
 
 // =========================================================
-// BASIC GETTERS, SETTERS & STATE ACCESSORS
+// STATE ACCESSORS & GETTERS/SETTERS
 // =========================================================
 
 int Process::getPID() const { return pid; }
@@ -142,10 +213,11 @@ void Process::setState(ProcessState State) {
 }
 
 bool Process::isFinished() const {
-    return currentState == FINISHED || (isStackInitialized && executionStack.empty());
+    return currentState == FINISHED || currentState == MEMORY_VIOLATION || (isStackInitialized && executionStack.empty());
 }
 
 SymbolTable& Process::getSymbolTable() { return symbolTable; }
+
 int Process::getAssignedCore() const { return assignedCore; }
 
 void Process::setAssignedCore(int core) {
@@ -181,8 +253,50 @@ int Process::getCurrentFrameInstructionCount() const {
     return static_cast<int>(currentFrame.instructions.size());
 }
 
+std::string Process::getStartedAtString() const {
+    std::time_t timeValue = std::chrono::system_clock::to_time_t(startedAt);
+    std::tm localTime{};
+#if defined(_WIN32)
+    localtime_s(&localTime, &timeValue);
+#else
+    localtime_r(&timeValue, &localTime);
+#endif
+    std::ostringstream stream;
+    stream << std::put_time(&localTime, "%m/%d/%Y %I:%M:%S %p");
+    return stream.str();
+}
+
+std::string Process::getLastUpdatedString() const {
+    std::time_t timeValue = std::chrono::system_clock::to_time_t(lastUpdatedAt);
+    std::tm localTime{};
+#if defined(_WIN32)
+    localtime_s(&localTime, &timeValue);
+#else
+    localtime_r(&timeValue, &localTime);
+#endif
+    std::ostringstream stream;
+    stream << std::put_time(&localTime, "%m/%d/%Y %I:%M:%S %p");
+    return stream.str();
+}
+
+const std::vector<Process::LogEntry>& Process::getCommandLogs() const { 
+    return commandLogs; 
+}
+
+void Process::clearCommandLogs() {
+    commandLogs.clear();
+}
+
+void Process::printExecutionLogs() const {
+    for (const auto& log : commandLogs) {
+        std::cout << "[" << log.timestamp << "] Core " << log.coreId 
+                  << " Line " << log.currentLine << "/" << log.totalLines 
+                  << ": " << log.commandText << std::endl;
+    }
+}
+
 // =========================================================
-// FLOW CONTROLS
+// FLOW INTERCEPTION CONTROLS
 // =========================================================
 
 void Process::pushLoopFrame(const std::vector<std::shared_ptr<ICommand>>& instructions, int repeats) {
@@ -203,17 +317,21 @@ void Process::decrementSleepTicks() {
     }
 }
 
-const std::vector<Process::LogEntry>& Process::getCommandLogs() const { 
-    return commandLogs; 
+void Process::logLineExecution(int pcFrameIndex) {
+    touch();
+}
+    
+std::vector<std::string> Process::getInstructionStrings() const {
+    std::vector<std::string> result;
+    for (const auto& cmd : commandList) {
+        if (cmd) result.push_back(cmd->toString());
+    }
+    return result;
 }
 
-void Process::clearCommandLogs() {
-    commandLogs.clear();
-}
-
-// In Process.cpp
 const std::vector<Process::LogEntry>& Process::getExecutionHistory() const {
     return executionHistory;
 }
+
 void Process::setRunStartTime(const std::string& time) { runStartTime = time; }
 std::string Process::getRunStartTime() const { return runStartTime; }
