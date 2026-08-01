@@ -15,6 +15,12 @@ public:
     // Satisfies the interface constraint; implementation is handled via interception
     void execute(SymbolTable& test) override {}
 
+    void execute(Process& process, MemoryManager& memoryManager) override
+    {
+        // Intentionally empty.
+        // and pushes the loop frame instead of executing it directly.
+    }
+
     const std::vector<std::shared_ptr<ICommand>>& getInstructions() const { return innerInstructions; }
     int getRepeats() const { return repeats; }
 
