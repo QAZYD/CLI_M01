@@ -14,7 +14,8 @@
 // =========================================================
 
 Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, bool varPrint,
-                 uint32_t memSize, uint32_t frameSize)
+                 uint32_t memSize, uint32_t frameSize,
+                 const std::vector<std::shared_ptr<ICommand>>& initialCommands)
     : pid(pid), 
       name(name), 
       currentState(READY), 
@@ -36,7 +37,12 @@ Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, b
     uint32_t numPages = (memorySize + effectiveFrameSize - 1) / effectiveFrameSize;
     pageTable.resize(numPages);
 
-    commandList = CommandGenerator::generateProgram(totalLines, name, gen, varPrint);
+    if (initialCommands.empty()) {
+        commandList = CommandGenerator::generateProgram(totalLines, name, gen, varPrint);
+    } else {
+        commandList = initialCommands;
+        totalInstructions = static_cast<int>(commandList.size());
+    }
 }
 
 void Process::addCommand(std::shared_ptr<ICommand> command) {

@@ -180,7 +180,7 @@ int main() {
         }
 
         // Combined handler for creating new screens (-s) and entering existing screens (-r)
-        else if (userInput.rfind("screen -s ", 0) == 0 || userInput.rfind("screen -r ", 0) == 0) {
+        else if (userInput.rfind("screen -s ", 0) == 0 || userInput.rfind("screen -c ", 0) == 0 || userInput.rfind("screen -r ", 0) == 0) {
             if (!scheduler) {
                 std::cout << "Error: System not initialized. Please run 'initialize' first.\n";
                 continue;

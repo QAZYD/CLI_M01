@@ -10,6 +10,8 @@
 #include "coreDependencies/configManager.h"
 #include "memoryControl/ReadCommand.h"
 #include "memoryControl/WriteCommand.h"
+#include "CLICONTROL/ScreenSpawnerCommand.h"
+#include "CLICONTROL/InitializeCommand.h"
 
 void printHeader(const std::string& title) {
     std::cout << "\n==========================================" << std::endl;
@@ -164,6 +166,31 @@ void test_memory_violation(const Config& config) {
     std::cout << "--> PASS: Out-of-bounds memory violation handled successfully!\n";
 }
 
+void test_custom_screen_instructions() {
+    printHeader("TEST 5: USER-DEFINED SCREEN INSTRUCTIONS");
+
+    InitializeCommand initHandler("config.txt");
+    assert(initHandler.execute() && "FAIL: Could not initialize config for custom instruction test!");
+
+    std::mt19937 gen(42);
+    ScreenSpawnerCommand spawner;
+    std::string command = "screen -c custom_proc 64 \"DECLARE varA 10; DECLARE varB 5; ADD varA varA varB; WRITE 0x500 varA; READ varC 0x500; PRINT(\"Result: \" + varC)\"";
+
+    bool created = spawner.execute(command, initHandler, gen);
+    std::cout << "[5.1] Creating process with custom instruction list -> " << (created ? "SUCCESS" : "FAIL") << std::endl;
+    assert(created && "FAIL: ScreenSpawnerCommand did not accept the new screen -c syntax!");
+
+    const auto& processes = spawner.getActiveProcesses();
+    assert(!processes.empty() && "FAIL: No process was created for custom instructions!");
+
+    const auto& customProcess = processes.back();
+    assert(customProcess->getName() == "custom_proc" && "FAIL: Process name was not preserved!");
+    assert(customProcess->getMemorySize() == 64 && "FAIL: Custom process memory size was not preserved!");
+    assert(customProcess->getInstructionStrings().size() == 6 && "FAIL: Custom instructions were not loaded into the process!");
+
+    std::cout << "--> PASS: Custom screen instructions verified successfully!\n";
+}
+
 int main() {
     try {
         // Initialize ConfigManager and load configuration
@@ -180,6 +207,7 @@ int main() {
         test_hex_read_write(config);
         test_demand_paging(config);
         test_memory_violation(config);
+        test_custom_screen_instructions();
 
         std::cout << "\n==========================================" << std::endl;
         std::cout << " 🎉 ALL INTEGRATION TESTS PASSED PERFECTLY!" << std::endl;
