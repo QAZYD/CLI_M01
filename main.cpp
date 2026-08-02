@@ -175,7 +175,7 @@ int main() {
             if (!scheduler) {
                 std::cout << "Error: System not initialized.\n";
             } else {
-                printVMStat(*scheduler, spawnerHandler, MemoryManager)
+                Reporter::printVMStat(*scheduler, spawnerHandler, MemoryManager);
             }
         }
 

@@ -84,7 +84,7 @@ namespace Reporter {
             out << "-----------------------------------------\n";
     }
 
-    void printVMStat(const IScheduler& scheduler, const ScreenSpawnerCommand& spawner, const MemoryManager& memManager, std::ostream& out = std::cout) {
+    void printVMStat(const IScheduler& scheduler, const ScreenSpawnerCommand& spawner, const MemoryManager& MemoryManager, std::ostream& out = std::cout) {
 
         out << "-----------------------------------------\n";
         out << "  Total memory     : " << MemoryManager.getTotalMemory() << "\n";
