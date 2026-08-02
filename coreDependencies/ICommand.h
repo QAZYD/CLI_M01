@@ -2,13 +2,13 @@
 #include <string>
 #include "SymbolTable.h"
 
-// Forward declarations
 class Process;
 class MemoryManager;
 
 class ICommand {
 public:
     virtual ~ICommand() = default;
+    virtual void execute(SymbolTable& table) = 0;
 
     // 1. Used by basic commands (ADD, PRINT, DECLARE, etc.)
     virtual void execute(SymbolTable& table) {}
