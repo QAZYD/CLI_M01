@@ -12,20 +12,16 @@ bool ConfigManager::loadConfig(const std::string& filename)
     }
 
     std::string line;
-    // 1. Read line-by-line instead of word-by-word
     while (std::getline(file, line)) {
         
-        // Remove leading/trailing whitespaces or skip entirely empty lines
         if (line.empty()) continue;
 
-        // 2. Safely ignore comment lines
-        // Finds if the line starts with "//". We can trim spaces if comments are indented.
+        // Skip comments starting with "//"
         size_t firstNonSpace = line.find_first_not_of(" \t\r\n");
         if (firstNonSpace == std::string::npos || line.compare(firstNonSpace, 2, "//") == 0) {
-            continue; // Skip comments and blank lines
+            continue; 
         }
 
-        // 3. Parse the clean line using a string stream
         std::stringstream ss(line);
         std::string key;
         ss >> key;
@@ -36,7 +32,7 @@ bool ConfigManager::loadConfig(const std::string& filename)
         else if (key == "scheduler") {
             ss >> config.scheduler;
 
-            // Clean up surrounding quotes
+            // Clean up quotes if present
             if (!config.scheduler.empty() && config.scheduler.front() == '"') {
                 config.scheduler.erase(0, 1);
             }
@@ -59,8 +55,23 @@ bool ConfigManager::loadConfig(const std::string& filename)
         else if (key == "delay-per-exec") {
             ss >> config.delayPerExec;
         }
-        else if(key == "varConfig"){
+        else if (key == "varConfig" || key == "var-config") {
             ss >> config.varPrint;
+        }
+        // =========================================================
+        // MEMORY CONFIGURATION PARSING
+        // =========================================================
+        else if (key == "max-overall-mem") {
+            ss >> config.maxOverallMem;
+        }
+        else if (key == "mem-per-frame") {
+            ss >> config.memPerFrame;
+        }
+        else if (key == "min-mem-per-proc") {
+            ss >> config.minMemPerProc;
+        }
+        else if (key == "max-mem-per-proc") {
+            ss >> config.maxMemPerProc;
         }
     }
 

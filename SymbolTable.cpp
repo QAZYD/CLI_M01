@@ -9,6 +9,14 @@ void SymbolTable::remove(const std::string& name) {
     table.erase(name);
 }
 
+size_t SymbolTable::size() const {
+    return table.size();
+}
+
+bool SymbolTable::isFull() const {
+    return table.size() >= MAX_VARIABLES;
+}
+
 bool SymbolTable::declare(const std::string& name, uint32_t value) {
     // If variable already exists, update its value
     if (contains(name)) {
@@ -17,7 +25,7 @@ bool SymbolTable::declare(const std::string& name, uint32_t value) {
     }
 
     // Capacity Check: Max 32 variables (64 bytes total)
-    if (table.size() >= MAX_VARIABLES) {
+    if (isFull()) {
         return false; // Limit reached: ignore declaration
     }
 
@@ -45,7 +53,7 @@ uint16_t SymbolTable::get(const std::string& name) {
     }
 
     // "Auto-declare to 0" rule — ONLY if under the 32-variable limit
-    if (table.size() < MAX_VARIABLES) {
+    if (!isFull()) {
         table[name] = 0;
         return 0;
     }

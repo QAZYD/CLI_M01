@@ -13,7 +13,8 @@
 // LIFECYCLE & CORE EXECUTION
 // =========================================================
 
-Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, bool varPrint)
+Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, bool varPrint,
+                 uint32_t memSize, uint32_t frameSize)
     : pid(pid), 
       name(name), 
       currentState(READY), 
@@ -23,12 +24,17 @@ Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, b
       assignedCore(-1), 
       runStartTime("N/A"),
       totalInstructions(totalLines),
-      memorySize(4096),            // Default memory allocation (4096 bytes)
+      memorySize(memSize),            // Configured or defaulted memory size
       invalidAddress(0),
       errorTimestamp("")
 {
     startedAt = std::chrono::system_clock::now();
     lastUpdatedAt = startedAt;
+
+    // Allocate page table entries based on memory size and frame size
+    uint32_t effectiveFrameSize = (frameSize > 0) ? frameSize : 16;
+    uint32_t numPages = (memorySize + effectiveFrameSize - 1) / effectiveFrameSize;
+    pageTable.resize(numPages);
 
     commandList = CommandGenerator::generateProgram(totalLines, name, gen, varPrint);
 }

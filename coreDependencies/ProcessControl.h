@@ -6,7 +6,7 @@
 #include <chrono>
 #include "SymbolTable.h"
 #include "ICommand.h"
-#include  "../memoryControl/memoryStructures.h"
+#include "../memoryControl/memoryStructures.h"
 #include "../memoryControl/memoryManager.h"
 
 class Process {
@@ -24,10 +24,9 @@ public:
         std::string timestamp;
         int currentLine;    
         int totalLines;
-        int coreId;;
+        int coreId;
     };
 
-    // Tracks an isolated block of instructions (The main script or a loop body)
     struct ExecutionFrame {
         std::vector<std::shared_ptr<ICommand>> instructions;
         int pc = 0;
@@ -37,9 +36,13 @@ public:
     // =========================================================
     // LIFECYCLE & CORE EXECUTION
     // =========================================================
-    Process(int pid, std::string name, int totalLines,  std::mt19937& gen, bool varPrint);
+    // Constructor accepts optional memSize and frameSize (defaults to 4096 / 16)
+    Process(int pid, std::string name, int totalLines, std::mt19937& gen, bool varPrint,
+            uint32_t memSize = 4096, uint32_t frameSize = 16);
+
     void addCommand(std::shared_ptr<ICommand> command);
     void executeCurrentCommand();
+    void executeCurrentCommand(MemoryManager& memoryManager);
     void moveToNextLine();
     std::string captureCurrentTimestamp() const;
 
@@ -49,7 +52,7 @@ public:
     int getPID() const;
     std::string getName() const;
     ProcessState getState() const;
-    void setState(ProcessState state);
+    void setState(ProcessState State);
     bool isFinished() const;
     SymbolTable& getSymbolTable();
 
@@ -61,7 +64,6 @@ public:
     int getSleepTicksRemaining() const { return sleepTicksRemaining; } 
     int getAssignedCore() const;
     void setAssignedCore(int core);
-
 
     std::string getStartedAtString() const;
     std::string getLastUpdatedString() const;
@@ -84,7 +86,9 @@ public:
     void setRunStartTime(const std::string& time);
     std::string getRunStartTime() const;
 
-    // --- ADDED MEMORY GETTERS & SETTERS ---
+    // =========================================================
+    // MEMORY METRICS & ACCESSORS
+    // =========================================================
     uint32_t getMemorySize() const { return memorySize; }
     std::vector<PageTableEntry>& getPageTable() { return pageTable; }
 
@@ -97,11 +101,7 @@ public:
         errorTimestamp = timestamp;
     }
 
-    // Pass MemoryManager into execution cycle
-    void executeCurrentCommand(MemoryManager& memoryManager);
-
 private:
-    // Identity & State
     int pid;
     std::string runStartTime;
     std::string name;
@@ -109,25 +109,23 @@ private:
     std::vector<LogEntry> commandLogs;
     std::vector<LogEntry> executionHistory;
     
-    // Execution Stack
     std::vector<ExecutionFrame> executionStack;
     std::vector<std::shared_ptr<ICommand>> commandList; 
     SymbolTable symbolTable;
     bool isStackInitialized;
 
-    // Execution Diagnostics & Tracking
     int totalInstructions;
     int linesExecuted;
     int sleepTicksRemaining;
-    int assignedCore; // Fixed: Removed the duplicate declaration of this variable
+    int assignedCore;
     std::vector<std::string> logs;
     std::chrono::system_clock::time_point startedAt;
     std::chrono::system_clock::time_point lastUpdatedAt;
 
-    // --- NEW MEMORY FIELDS ---
-    uint32_t memorySize;                   // Allocated size (e.g. 256, 512, 1024)
-    std::vector<PageTableEntry> pageTable; // Per-process Page Table
+    // Memory tracking
+    uint32_t memorySize;                   
+    std::vector<PageTableEntry> pageTable; 
     
-    uint16_t invalidAddress = 0;           // Address that caused violation
-    std::string errorTimestamp = "";       // Timestamp when violation occurred[cite: 1]
+    uint16_t invalidAddress = 0;           
+    std::string errorTimestamp = "";       
 };

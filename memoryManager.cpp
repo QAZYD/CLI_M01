@@ -22,7 +22,7 @@ void MemoryManager::initialize(uint32_t total_mem, uint32_t frame_size) {
     current_tick = 0;
 
     // Initialize / Truncate backing store file upon startup
-    std::ofstream bs(BACKING_STORE_FILE, std::ios::trunc);
+    std::ofstream bs(BACKING_STORE_FILE, std::ios::app);
     bs.close();
 }
 
@@ -184,18 +184,25 @@ void MemoryManager::evict_frame(int frame_id) {
     victim.virtual_page_num = -1;
     victim.dirty = false;
 }
-
 void MemoryManager::write_to_backing_store(const std::string& proc_name, int page_num, const std::vector<uint8_t>& buffer) {
     std::ofstream bs(BACKING_STORE_FILE, std::ios::app);
     if (bs.is_open()) {
-        bs << proc_name << "_P" << page_num << ":";
+        std::stringstream ss;
+        ss << proc_name << "_P" << page_num << ":";
         for (uint8_t byte : buffer) {
-            bs << std::hex << std::setw(2) << std::setfill('0') << (int)byte << " ";
+            ss << std::hex << std::setw(2) << std::setfill('0') << (int)byte << " ";
         }
-        bs << "\n";
+
+        std::string formatted_line = ss.str();
+
+        // 1. Print to console indicating it's dumping to the backing store file
+        std::cout << "      [BACKING STORE DUMP] Writing page to " << BACKING_STORE_FILE 
+                  << " -> " << formatted_line << std::dec << std::endl;
+
+        // 2. Write to the file
+        bs << formatted_line << "\n";
     }
 }
-
 void MemoryManager::read_from_backing_store(const std::string& proc_name, int page_num, std::vector<uint8_t>& buffer) {
     std::fill(buffer.begin(), buffer.end(), 0);
     std::ifstream bs(BACKING_STORE_FILE);
