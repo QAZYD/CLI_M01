@@ -59,6 +59,19 @@ bool ConfigManager::loadConfig(const std::string& filename)
         else if (key == "delay-per-exec") {
             ss >> config.delayPerExec;
         }
+        else if (key == "max-overall-mem") {
+            ss >> config.maxoverallMem;
+        }
+        else if (key == "mem-per-frame") {
+            ss >> config.memperframe;
+        }
+        else if (key == "min-mem-per-proc") {
+            ss >> config.minmemperproc;
+        }
+        else if (key == "max-mem-per-proc") {
+            ss >> config.maxmemperproc;
+        }
+        
         else if(key == "varConfig"){
             ss >> config.varPrint;
         }
