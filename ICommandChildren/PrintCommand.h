@@ -19,13 +19,6 @@ public:
         
     }
 
-    void execute(Process& process, MemoryManager& memoryManager) override
-    {
-        // Intentionally empty.
-        // Process::executeCurrentCommand() intercepts ForCommand
-        // and pushes the loop frame instead of executing it directly.
-    }
-
     // --- TOSTRING IMPLEMENTATION ---
     std::string toString() const override {
         if (!varName.empty()) {

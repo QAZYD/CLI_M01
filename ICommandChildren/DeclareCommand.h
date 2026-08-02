@@ -17,13 +17,6 @@ public:
         table.set(varName, defaultValue);
     }
 
-    void execute(Process& process, MemoryManager& memoryManager) override
-    {
-        // Intentionally empty.
-        // Process::executeCurrentCommand() intercepts ForCommand
-        // and pushes the loop frame instead of executing it directly.
-    }
-
     // --- ADDED TOSTRING IMPLEMENTATION ---
     std::string toString() const override {
         return "DECLARE(" + varName + ", " + std::to_string(defaultValue) + ")";

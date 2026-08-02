@@ -12,13 +12,6 @@ public:
     // Satisfies the interface constraint; implementation is handled via interception
     void execute(SymbolTable& test) override {} 
 
-    void execute(Process& process, MemoryManager& memoryManager) override
-    {
-        // Intentionally empty.
-        // Process::executeCurrentCommand() intercepts ForCommand
-        // and pushes the loop frame instead of executing it directly.
-    }
-
     uint8_t getTicks() const { return ticks; }
 
     // --- ADDED TOSTRING IMPLEMENTATION ---
