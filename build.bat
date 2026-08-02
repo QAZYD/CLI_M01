@@ -11,6 +11,7 @@ CommandGenerator.cpp ^
 InitializeCommand.cpp ^
 ProcessLogger.cpp ^
 ScreenSpawnerCommand.cpp ^
+memoryManager.cpp ^
 -I. -o main
 
 if %errorlevel% neq 0 (

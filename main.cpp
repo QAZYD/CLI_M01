@@ -22,6 +22,7 @@ int main() {
     ScreenSpawnerCommand spawnerHandler; 
     
     std::unique_ptr<IScheduler> scheduler = nullptr;
+    MemoryManager MemoryManager;
     
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -48,6 +49,7 @@ int main() {
             if (initHandler.execute()) {
                 const auto& config = initHandler.getConfig();
                 batchProcessFreq = config.batchProcessFreq;
+                MemoryManager.initialize(config.maxoverallMem, config.memperframe);
                 
                 // --- DYNAMIC SCHEDULER SELECTION ---
                 if (config.scheduler == "rr") {
@@ -61,6 +63,7 @@ int main() {
                 std::cout << "Scheduler (" << config.scheduler << ") activated.\n";
             }
         }
+
         // SCHEDULER-START ---
         else if (userInput == "scheduler-start") {
             if (!scheduler) {
@@ -141,12 +144,12 @@ int main() {
                 Reporter::printScreenLs(*scheduler, spawnerHandler);
             }
         }
-
+        // Report Util
         else if (userInput == "report-util") {
-    if (!scheduler) {
-        std::cout << "Error: System not initialized. Run 'initialize' first.\n";
-    } else {
-        std::ofstream logFile("csopesy-log.txt");
+            if (!scheduler) {
+                std::cout << "Error: System not initialized. Run 'initialize' first.\n";
+            } else {
+                std::ofstream logFile("csopesy-log.txt");
         if (logFile.is_open()) {
             Reporter::printScreenLs(*scheduler, spawnerHandler, logFile);
             logFile.close();
@@ -155,7 +158,38 @@ int main() {
             std::cout << "Error: Could not open csopesy-log.txt for writing.\n";
         }
     }
-}
+}       
+        /* TODO
+        // Main menu version of Process-smi
+        else if (userInput == "process-smi") {
+            if (!scheduler) {
+                std::cout << "Error: System not initialized.\n";
+            } else {
+                MemoryReporter::printVMStat(memoryManager, *scheduler);
+            }
+        }
+        */
+
+        // VMSTAT
+        else if (userInput == "vmstat") {
+            if (!scheduler) {
+                std::cout << "Error: System not initialized.\n";
+            } else {
+                // You could move this to somewhere else
+                // but im kinda lazy since i also need the scheduler.getcores or something
+                std::cout << "-----------------------------------------\n";
+                std::cout << "  Total memory     : " << MemoryManager.getTotalMemory() << "\n";
+                std::cout << "  Used memory      : " << MemoryManager.getUsedMemory() << "\n";
+                std::cout << "  Free memory      : " << MemoryManager.getFreeMemory() << "\n";
+                std::cout << "  Idle CPU ticks   : " << "TODO "<< "\n";
+                std::cout << "  Active CPU ticks : " << "TODO " << "\n";
+                std::cout << "  Total CPU ticks  : " << "TODO " << "\n";
+                std::cout << "  Num paged in     : " << MemoryManager.getPagesPagedIn() << "\n";
+                std::cout << "  Num paged out    : " << MemoryManager.getPagesPagedOut() << "\n";
+                std::cout << "-----------------------------------------\n";
+            }
+        }
+
         // Combined handler for creating new screens (-s) and entering existing screens (-r)
         else if (userInput.rfind("screen -s ", 0) == 0 || userInput.rfind("screen -r ", 0) == 0) {
             if (!scheduler) {
