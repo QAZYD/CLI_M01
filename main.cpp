@@ -159,34 +159,23 @@ int main() {
         }
     }
 }       
-        /* TODO
+        // Both process-smi and vmstat are incomplete for now
+
         // Main menu version of Process-smi
         else if (userInput == "process-smi") {
             if (!scheduler) {
                 std::cout << "Error: System not initialized.\n";
             } else {
-                MemoryReporter::printVMStat(memoryManager, *scheduler);
+                Reporter::printprocesssmi(*scheduler, spawnerHandler, MemoryManager);
             }
         }
-        */
 
         // VMSTAT
         else if (userInput == "vmstat") {
             if (!scheduler) {
                 std::cout << "Error: System not initialized.\n";
             } else {
-                // You could move this to somewhere else
-                // but im kinda lazy since i also need the scheduler.getcores or something
-                std::cout << "-----------------------------------------\n";
-                std::cout << "  Total memory     : " << MemoryManager.getTotalMemory() << "\n";
-                std::cout << "  Used memory      : " << MemoryManager.getUsedMemory() << "\n";
-                std::cout << "  Free memory      : " << MemoryManager.getFreeMemory() << "\n";
-                std::cout << "  Idle CPU ticks   : " << "TODO "<< "\n";
-                std::cout << "  Active CPU ticks : " << "TODO " << "\n";
-                std::cout << "  Total CPU ticks  : " << "TODO " << "\n";
-                std::cout << "  Num paged in     : " << MemoryManager.getPagesPagedIn() << "\n";
-                std::cout << "  Num paged out    : " << MemoryManager.getPagesPagedOut() << "\n";
-                std::cout << "-----------------------------------------\n";
+                printVMStat(*scheduler, spawnerHandler, MemoryManager)
             }
         }
 
