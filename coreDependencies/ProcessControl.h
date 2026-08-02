@@ -38,7 +38,8 @@ public:
     // =========================================================
     // Constructor accepts optional memSize and frameSize (defaults to 4096 / 16)
     Process(int pid, std::string name, int totalLines, std::mt19937& gen, bool varPrint,
-            uint32_t memSize = 4096, uint32_t frameSize = 16);
+            uint32_t memSize = 4096, uint32_t frameSize = 16,
+            const std::vector<std::shared_ptr<ICommand>>& initialCommands = {});
 
     void addCommand(std::shared_ptr<ICommand> command);
     void executeCurrentCommand();

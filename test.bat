@@ -7,6 +7,8 @@ SymbolTable.cpp ^
 CommandGenerator.cpp ^
 configManager.cpp ^
 ICommand.cpp ^
+ScreenSpawnerCommand.cpp ^
+InitializeCommand.cpp ^
 -I. -IcoreDependencies -o test_all
 
 if %errorlevel% neq 0 (
