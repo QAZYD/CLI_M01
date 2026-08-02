@@ -49,7 +49,7 @@ int main() {
             if (initHandler.execute()) {
                 const auto& config = initHandler.getConfig();
                 batchProcessFreq = config.batchProcessFreq;
-                MemoryManager.initialize(config.maxoverallMem, config.memperframe);
+                MemoryManager.initialize(config.maxOverallMem, config.memPerFrame);
                 
                 // --- DYNAMIC SCHEDULER SELECTION ---
                 if (config.scheduler == "rr") {
