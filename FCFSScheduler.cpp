@@ -5,7 +5,9 @@
 #include <chrono>
 
 FCFSScheduler::FCFSScheduler(int cores, int delayCycles, std::shared_ptr<MemoryManager> memMgr) 
-    : totalCores(cores), delayPerExec(delayCycles), memoryManager(memMgr), isRunning(false), cpuCycles(0), activeWorkerCount(0) {
+    : totalCores(cores), delayPerExec(delayCycles), memoryManager(memMgr), 
+      isRunning(false), cpuCycles(0), activeWorkerCount(0),
+      activeCpuTicks(0), idleCpuTicks(0) { // <-- Initialize here
     if (totalCores <= 0) totalCores = 1; 
 }
 
@@ -93,8 +95,12 @@ void FCFSScheduler::runLoop(int coreId) {
             return cpuCycles > lastProcessedCycle || !isRunning;
         });
 
-        if (!isRunning) break;
+        // Break only if stopped AND no pending cycle needs tick accounting
+        if (!isRunning && cpuCycles == lastProcessedCycle) break; 
         lastProcessedCycle = cpuCycles;
+
+        // Remember if this core was active BEFORE processing/finishing
+        bool wasActiveThisTick = (core.currentProcess != nullptr);
 
         try {
             // 1. Core Idle Check: Grab available process from readyQueue
@@ -113,24 +119,23 @@ void FCFSScheduler::runLoop(int coreId) {
                 }
 
                 core.remainingDelayCycles = 0; 
+                wasActiveThisTick = true; // Mark as active for this cycle
             }
 
             // 2. Core Execution Step
             if (core.currentProcess) {
-                // Check if process completed all instructions (e.g. woke up after completing final instruction)
                 if (core.currentProcess->isFinished()) {
                     core.currentProcess->setState(Process::FINISHED);
                     if (memoryManager) {
                         memoryManager->deallocateProcessMemory(*core.currentProcess);
                     }
                     core.currentProcess->setAssignedCore(-1);
-                    core.currentProcess = nullptr; // Freed from RAM and core
+                    core.currentProcess = nullptr; 
                 }
                 else if (core.remainingDelayCycles > 0) {
                     core.remainingDelayCycles--;
                 } 
                 else {
-                    // Execute current instruction safely
                     if (memoryManager) {
                         core.currentProcess->executeCurrentCommand(*memoryManager);
                     } else {
@@ -139,7 +144,6 @@ void FCFSScheduler::runLoop(int coreId) {
 
                     core.currentProcess->moveToNextLine();
 
-                    // Check post-execution states
                     if (core.currentProcess->getState() == Process::MEMORY_VIOLATION) {
                         if (memoryManager) {
                             memoryManager->deallocateProcessMemory(*core.currentProcess);
@@ -171,6 +175,13 @@ void FCFSScheduler::runLoop(int coreId) {
         } 
         catch (...) {
             std::cerr << "[Core " << coreId << " Unknown Exception]" << std::endl;
+        }
+
+        // --- Accurate Tick Recording ---
+        if (wasActiveThisTick) {
+            activeCpuTicks++;
+        } else {
+            idleCpuTicks++;
         }
 
         // Guarantee activeWorkerCount decrement to prevent scheduler deadlocks

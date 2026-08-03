@@ -1,11 +1,13 @@
 #include "coreDependencies/RRScheduler.h"
 #include "memoryControl/MemoryManager.h"
+#include "coreDependencies/ProcessControl.h"
 #include <iostream>
 #include <chrono>
 
 RRScheduler::RRScheduler(int cores, int delayCycles, int timeQuantum, std::shared_ptr<MemoryManager> memMgr) 
     : totalCores(cores), delayPerExec(delayCycles), timeQuantum(timeQuantum), memoryManager(memMgr),
-      isRunning(false), cpuCycles(0), activeWorkerCount(0) {
+      isRunning(false), cpuCycles(0), activeWorkerCount(0),
+      activeCpuTicks(0), idleCpuTicks(0) {
     if (totalCores <= 0) totalCores = 1; 
 }
 
@@ -70,7 +72,7 @@ void RRScheduler::masterClockLoop() {
     }
 }
 
-// --- MULTI-THREADED CORE LOOP WITH QUANTUM PREEMPTION & DEMAND PAGING ---
+// --- MULTI-THREADED CORE LOOP WITH QUANTUM PREEMPTION, DEMAND PAGING & TICK METRICS ---
 void RRScheduler::runLoop(int coreId) {
     CoreState core;
     int lastProcessedCycle = 0;
@@ -82,8 +84,12 @@ void RRScheduler::runLoop(int coreId) {
             return cpuCycles > lastProcessedCycle || !isRunning;
         });
 
-        if (!isRunning) break;
+        // Break only if stopped AND no pending cycle needs tick accounting
+        if (!isRunning && cpuCycles == lastProcessedCycle) break; 
         lastProcessedCycle = cpuCycles;
+
+        // Remember if this core was active BEFORE processing/finishing
+        bool wasActiveThisTick = (core.currentProcess != nullptr);
 
         try {
             // 1. Core Idle Check: Grab available process from readyQueue
@@ -105,6 +111,7 @@ void RRScheduler::runLoop(int coreId) {
 
                 core.remainingDelayCycles = 0; 
                 core.quantumUsed = 0; 
+                wasActiveThisTick = true; // Mark as active for this cycle
             }
 
             // 2. Core Execution Step
@@ -182,6 +189,13 @@ void RRScheduler::runLoop(int coreId) {
             std::cerr << "[RR Core " << coreId << " Unknown Exception]" << std::endl;
         }
 
+        // --- Accurate Tick Recording ---
+        if (wasActiveThisTick) {
+            activeCpuTicks++;
+        } else {
+            idleCpuTicks++;
+        }
+
         // Guarantee activeWorkerCount decrement to prevent lockup
         activeWorkerCount--;
         if (activeWorkerCount == 0) {
@@ -191,6 +205,6 @@ void RRScheduler::runLoop(int coreId) {
 }
 
 int RRScheduler::getCPUCycles() const {
-    std::lock_guard<std::mutex> lock(tickMutex);
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(tickMutex));
     return cpuCycles;
 }

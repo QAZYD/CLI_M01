@@ -10,20 +10,24 @@
 #include "IScheduler.h"
 #include "ProcessControl.h" 
 
-class FCFSScheduler : public IScheduler{
+class FCFSScheduler : public IScheduler {
 public:
     FCFSScheduler(int cores, int delayCycles);
+    FCFSScheduler(int cores, int delayCycles, std::shared_ptr<MemoryManager> memMgr);
     ~FCFSScheduler();
 
     void start() override;
     void stop() override;
     void pushProcess(std::shared_ptr<Process> process) override;
-    FCFSScheduler(int cores, int delayCycles, std::shared_ptr<MemoryManager> memMgr);
     int getCPUCycles() const override;
     
-    int getTotalCores() const override{ 
+    int getTotalCores() const override { 
         return totalCores; 
     }
+
+    // --- Added getters for vmstat ---
+    int getActiveCPUTicks() const override { return activeCpuTicks; }
+    int getIdleCPUTicks() const override { return idleCpuTicks; }
 
 private:
     struct CoreState {
@@ -38,11 +42,16 @@ private:
     bool isRunning;
     int cpuCycles;    // Central tick counter
 
+    // --- Added tracking variables ---
+    int activeCpuTicks = 0;
+    int idleCpuTicks = 0;
+
     std::vector<std::thread> coreThreads;
     std::thread masterClockThread;
 
     std::queue<std::shared_ptr<Process>> readyQueue;
     std::vector<std::shared_ptr<Process>> waitingList;
+    
     // Synchronization primitives for the cycle ticks
     std::mutex tickMutex;
     std::condition_variable tickCv;

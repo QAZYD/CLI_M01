@@ -14,7 +14,6 @@ class MemoryManager; // Forward declaration
 
 class RRScheduler : public IScheduler {
 public:
-    // Added memMgr parameter (defaults to nullptr for backward compatibility)
     RRScheduler(int cores, int delayCycles, int timeQuantum, std::shared_ptr<MemoryManager> memMgr = nullptr);
     ~RRScheduler();
 
@@ -27,20 +26,28 @@ public:
         return totalCores; 
     }
 
+    // --- Added getters for vmstat ---
+    int getActiveCPUTicks() const override { return activeCpuTicks; }
+    int getIdleCPUTicks() const override { return idleCpuTicks; }
+
 private:
     struct CoreState {
         std::shared_ptr<Process> currentProcess = nullptr;
         int remainingDelayCycles = 0;
-        int quantumUsed = 0; // Tracks how many cycles the current process has been running
+        int quantumUsed = 0;
     };
 
     int totalCores;
     int delayPerExec;   // Execution delay in CPU cycles
-    int timeQuantum;    // Maximum cycles a process can hold the CPU before preemption
+    int timeQuantum;    // Maximum cycles a process can hold CPU
     std::shared_ptr<MemoryManager> memoryManager;
 
     bool isRunning;
     int cpuCycles;      // Central tick counter
+
+    // --- Added tracking variables ---
+    int activeCpuTicks = 0;
+    int idleCpuTicks = 0;
 
     std::vector<std::thread> coreThreads;
     std::thread masterClockThread;

@@ -1,7 +1,9 @@
 #include "../coreDependencies/FCFSScheduler.h"
+#include "../coreDependencies/ProcessControl.h"
 #include "ScreenSpawnerCommand.h"
 #include "../memoryControl/memoryManager.h"
 #include <iostream>
+#include <iomanip>
 #include <ostream> 
 #include <set>
 
@@ -57,45 +59,67 @@ namespace Reporter {
              }
         }
     }
-    void printprocesssmi(const IScheduler& scheduler, const ScreenSpawnerCommand& spawner, const MemoryManager& MemoryManager, std::ostream& out = std::cout) {
-            const auto& processList = spawner.getActiveProcesses();
-            const auto& historyList = spawner.getFinishedHistory();
-            int totalCores = scheduler.getTotalCores();
+void printprocesssmi(const IScheduler& scheduler, const ScreenSpawnerCommand& spawner, const MemoryManager& MemoryManager, std::ostream& out = std::cout) {
+    const auto& processList = spawner.getActiveProcesses();
+    int totalCores = scheduler.getTotalCores();
 
-            std::set<std::string> printedIds;
-
-            int runningCount = 0;
-            for (const auto& proc : processList) {
-                if (proc->getAssignedCore() != -1 && !proc->isFinished()) {
-                    runningCount++;
-                }
-            }
-
-            out << "-----------------------------------------\n";
-            out << " PROCESS-SMI V01.00 \n";
-            out << "-----------------------------------------\n";
-            out << "  CPU-Util       : " << (float)runningCount / (float)totalCores * 100.0f << "%\n";
-            out << "  Memory Usage   : " << MemoryManager.getUsedMemory() << " / " << MemoryManager.getTotalMemory() << "\n";
-            out << "  Memory Util    : " << static_cast<double>(MemoryManager.getUsedMemory()) / MemoryManager.getTotalMemory() * 100 << "%\n\n";
-            out << "=========================================\n";
-            out << " Running processes and memory usage: \n";
-            out << "-----------------------------------------\n";
-            out << "TODO something spawner spawner, im gonna assume that processes has memory inside of them now\n";
-            out << "-----------------------------------------\n";
+    int runningCount = 0;
+    for (const auto& proc : processList) {
+        if (proc && proc->getAssignedCore() != -1 && !proc->isFinished()) {
+            runningCount++;
+        }
     }
 
-    void printVMStat(const IScheduler& scheduler, const ScreenSpawnerCommand& spawner, const MemoryManager& MemoryManager, std::ostream& out = std::cout) {
+    float cpuUtil = totalCores > 0 ? ((float)runningCount / (float)totalCores) * 100.0f : 0.0f;
+    size_t usedMem = MemoryManager.getUsedMemory();
+    size_t totalMem = MemoryManager.getTotalMemory();
+    double memUtil = totalMem > 0 ? (static_cast<double>(usedMem) / totalMem) * 100.0 : 0.0;
 
-        out << "-----------------------------------------\n";
-        out << "  Total memory     : " << MemoryManager.getTotalMemory() << "\n";
-        out << "  Used memory      : " << MemoryManager.getUsedMemory() << "\n";
-        out << "  Free memory      : " << MemoryManager.getFreeMemory() << "\n";
-        out << "  Idle CPU ticks   : " << "TODO "<< "\n";
-        out << "  Active CPU ticks : " << "TODO " << "\n";
-        out << "  Total CPU ticks  : " << "TODO " << "\n";
-        out << "  Num paged in     : " << MemoryManager.getPagesPagedIn() << "\n";
-        out << "  Num paged out    : " << MemoryManager.getPagesPagedOut() << "\n";
-        out << "-----------------------------------------\n";
+    out << "-----------------------------------------\n";
+    out << " PROCESS-SMI V01.00 \n";
+    out << "-----------------------------------------\n";
+    out << "  CPU-Util       : " << cpuUtil << "%\n";
+    out << "  Memory Usage   : " << usedMem << " / " << totalMem << " bytes\n";
+    out << "  Memory Util    : " << memUtil << "%\n\n";
+    out << "=========================================\n";
+    out << " Running processes and memory usage: \n";
+    out << "-----------------------------------------\n";
 
+    bool foundRunning = false;
+    for (const auto& proc : processList) {
+        // Display non-finished active processes
+        if (proc && !proc->isFinished()) {
+            foundRunning = true;
+            out << " " << std::left << std::setw(20) << proc->getName() 
+                << proc->getMemorySize() << " bytes\n";
+        }
     }
+
+    if (!foundRunning) {
+        out << " (No running processes)\n";
+    }
+
+    out << "-----------------------------------------\n";
+}
+   void printVMStat(const IScheduler& scheduler, const ScreenSpawnerCommand& spawner, const MemoryManager& MemoryManager, std::ostream& out = std::cout) {
+    size_t totalMem = MemoryManager.getTotalMemory();
+    size_t usedMem  = MemoryManager.getUsedMemory();
+    size_t freeMem  = MemoryManager.getFreeMemory();
+
+    // Pull CPU ticks from scheduler state
+    int idleTicks   = scheduler.getIdleCPUTicks();   // Accumulation of idle cycles across cores
+    int activeTicks = scheduler.getActiveCPUTicks(); // Accumulation of execution cycles across cores
+    int totalTicks  = scheduler.getCPUCycles();      // Total clock ticks passed
+
+    out << "-----------------------------------------\n";
+    out << "  Total memory     : " << totalMem << " bytes\n";
+    out << "  Used memory      : " << usedMem << " bytes\n";
+    out << "  Free memory      : " << freeMem << " bytes\n";
+    out << "  Idle CPU ticks   : " << idleTicks << "\n";
+    out << "  Active CPU ticks : " << activeTicks << "\n";
+    out << "  Total CPU ticks  : " << totalTicks << "\n";
+    out << "  Num paged in     : " << MemoryManager.getPagesPagedIn() << "\n";
+    out << "  Num paged out    : " << MemoryManager.getPagesPagedOut() << "\n";
+    out << "-----------------------------------------\n";
+}
 }
