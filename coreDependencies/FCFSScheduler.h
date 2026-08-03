@@ -53,7 +53,8 @@ private:
     std::vector<std::shared_ptr<Process>> waitingList;
     
     // Synchronization primitives for the cycle ticks
-    std::mutex tickMutex;
+    // In FCFSScheduler.h
+mutable std::mutex tickMutex;
     std::condition_variable tickCv;
     int activeWorkerCount;
 

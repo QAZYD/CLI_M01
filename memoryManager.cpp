@@ -1,17 +1,20 @@
 #include "memoryControl/MemoryManager.h"
-#include "coreDependencies/ProcessControl.h" // Ensures Process class layout is fully known
+#include "coreDependencies/ProcessControl.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
 #include <algorithm>
+#include <iostream>
 
 void MemoryManager::initialize(uint32_t total_mem, uint32_t frame_size) {
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
     this->max_overall_mem = total_mem;
     this->mem_per_frame = frame_size;
     this->total_frames = (frame_size > 0) ? (total_mem / frame_size) : 0;
+    this->current_allocated_mem = 0;
 
+    allocated_pids.clear(); // Track allocated processes
     frame_table.clear();
     for (uint32_t i = 0; i < total_frames; ++i) {
         frame_table.emplace_back(i, mem_per_frame);
@@ -21,9 +24,85 @@ void MemoryManager::initialize(uint32_t total_mem, uint32_t frame_size) {
     pages_paged_out = 0;
     current_tick = 0;
 
-    // Initialize / Truncate backing store file upon startup
+    // Truncate backing store file upon startup
     std::ofstream bs(BACKING_STORE_FILE, std::ios::out | std::ios::trunc);
     bs.close();
+}
+
+bool MemoryManager::allocateProcessMemory(Process& proc) {
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+
+    // Prevent double allocation if called by both Spawner and Scheduler
+    if (allocated_pids.count(proc.getPID()) > 0) {
+        return true; 
+    }
+
+    // --- DEMAND PAGING FIX ---
+    // Do NOT reject process creation based on total process size vs max_overall_mem.
+    // Processes are allowed to spawn even if physical RAM is full; their pages 
+    // will be loaded into physical frames lazily on-demand via page faults.
+    
+    allocated_pids.insert(proc.getPID());
+
+    // Initialize the process's page table entries as not in physical memory yet
+    auto& pt = proc.getPageTable();
+    for (auto& pte : pt) {
+        pte.valid = false;
+        pte.frame_number = -1;
+        pte.dirty = false;
+    }
+
+    return true;
+}
+
+void MemoryManager::deallocateProcessMemory(Process& proc) {
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+
+    // FIX 1: Subtract memory allocation cleanly if process was allocated
+    if (allocated_pids.count(proc.getPID()) > 0) {
+        if (current_allocated_mem >= proc.getMemorySize()) {
+            current_allocated_mem -= proc.getMemorySize();
+        } else {
+            current_allocated_mem = 0;
+        }
+        allocated_pids.erase(proc.getPID());
+    }
+
+    // Invalidate process page table entries
+    auto& pt = proc.getPageTable();
+    for (auto& pte : pt) {
+        pte.valid = false;
+        pte.frame_number = -1;
+        pte.dirty = false;
+    }
+
+    // Evict physical frames currently owned by this process
+    for (size_t i = 0; i < frame_table.size(); ++i) {
+        if (frame_table[i].process_ptr == &proc || frame_table[i].process_name == proc.getName()) {
+            frame_table[i].is_free = true;
+            frame_table[i].process_name = "";
+            frame_table[i].process_ptr = nullptr;
+            frame_table[i].virtual_page_num = -1;
+            frame_table[i].dirty = false;
+        }
+    }
+}
+
+void MemoryManager::deallocateProcessMemory(int pid) {
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+
+    // FIX 3: Search frame table for process reference, otherwise rely on allocated_pids
+    Process* target_proc = nullptr;
+    for (size_t i = 0; i < frame_table.size(); ++i) {
+        if (frame_table[i].process_ptr && frame_table[i].process_ptr->getPID() == pid) {
+            target_proc = frame_table[i].process_ptr;
+            break;
+        }
+    }
+
+    if (target_proc) {
+        deallocateProcessMemory(*target_proc);
+    }
 }
 
 int MemoryManager::access_page(Process& proc, uint32_t page_num) {
@@ -39,15 +118,15 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
         return frame_id;
     }
 
-    // 2. Page Fault Triggered!
+    // 2. Page Fault Triggered
     pages_paged_in++;
-    
+
     int allocated_frame_id = find_free_frame();
 
-    // 3. If no free frame exists, pick victim and evict (LRU)
+    // 3. Evict frame using LRU if physical frames are full
     if (allocated_frame_id == -1) {
         allocated_frame_id = select_victim_frame_lru();
-        evict_frame(allocated_frame_id);
+        evict_frame(allocated_frame_id); // <--- Triggers write_to_backing_store if victim.dirty!
     }
 
     // 4. Load page into allocated frame
@@ -57,12 +136,10 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
     target_frame.process_ptr = &proc;
     target_frame.virtual_page_num = page_num;
     target_frame.last_accessed_tick = current_tick;
-    target_frame.dirty = false;
+    target_frame.dirty = true; // Flag dirty so eviction writes state to file
 
-    // Fetch frame contents from backing store if saved previously
     read_from_backing_store(proc.getName(), page_num, target_frame.buffer);
 
-    // Update process page table
     if (page_num < page_table.size()) {
         page_table[page_num].valid = true;
         page_table[page_num].frame_number = allocated_frame_id;
@@ -72,7 +149,6 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
 }
 
 bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t value) {
-    // Bounds Check: Out of Bounds Access Check
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         trigger_memory_violation(proc, virt_addr);
         return false;
@@ -80,24 +156,21 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
 
     if (mem_per_frame == 0) return false;
 
-    // Byte 0
+    // FIX 2: Hold lock for the ENTIRE read-modify-write duration to prevent frame eviction race
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+
     uint32_t page0 = virt_addr / mem_per_frame;
     uint32_t offset0 = virt_addr % mem_per_frame;
     int frame0 = access_page(proc, page0);
 
-    // Byte 1 (Handles cross-page boundaries safely)
     uint16_t addr1 = virt_addr + 1;
     uint32_t page1 = addr1 / mem_per_frame;
     uint32_t offset1 = addr1 % mem_per_frame;
 
-    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-
-    // Write Byte 0
     frame_table[frame0].buffer[offset0] = static_cast<uint8_t>(value & 0xFF);
     frame_table[frame0].dirty = true;
     proc.getPageTable()[page0].dirty = true;
 
-    // Write Byte 1
     int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
     frame_table[frame1].buffer[offset1] = static_cast<uint8_t>((value >> 8) & 0xFF);
     frame_table[frame1].dirty = true;
@@ -107,7 +180,6 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
 }
 
 bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out_value) {
-    // Bounds Check: Out of Bounds Access Check
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         trigger_memory_violation(proc, virt_addr);
         return false;
@@ -115,26 +187,22 @@ bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out
 
     if (mem_per_frame == 0) return false;
 
-    // Byte 0
+    // FIX 2: Hold lock for the ENTIRE read duration
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+
     uint32_t page0 = virt_addr / mem_per_frame;
     uint32_t offset0 = virt_addr % mem_per_frame;
     int frame0 = access_page(proc, page0);
 
-    // Byte 1 (Handles cross-page boundaries safely)
     uint16_t addr1 = virt_addr + 1;
     uint32_t page1 = addr1 / mem_per_frame;
     uint32_t offset1 = addr1 % mem_per_frame;
 
-    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-
     uint8_t low_byte = frame_table[frame0].buffer[offset0];
-
     int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
     uint8_t high_byte = frame_table[frame1].buffer[offset1];
 
-    // Reconstruct 16-bit uint from 2 bytes
     out_value = static_cast<uint16_t>(low_byte) | (static_cast<uint16_t>(high_byte) << 8);
-
     return true;
 }
 
@@ -144,11 +212,13 @@ uint32_t MemoryManager::getTotalMemory() const {
 
 uint32_t MemoryManager::getUsedMemory() const {
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-    uint32_t occupied_frames = 0;
+    uint32_t used_frames = 0;
     for (const auto& frame : frame_table) {
-        if (!frame.is_free) occupied_frames++;
+        if (!frame.is_free) {
+            used_frames++;
+        }
     }
-    return occupied_frames * mem_per_frame;
+    return used_frames * mem_per_frame;
 }
 
 uint32_t MemoryManager::getFreeMemory() const {
@@ -186,12 +256,10 @@ void MemoryManager::evict_frame(int frame_id) {
     Frame& victim = frame_table[frame_id];
     pages_paged_out++;
 
-    // Write to backing store if modified
     if (victim.dirty) {
         write_to_backing_store(victim.process_name, victim.virtual_page_num, victim.buffer);
     }
 
-    // Invalidate victim page table entry on owner process
     if (victim.process_ptr != nullptr) {
         auto& pt = victim.process_ptr->getPageTable();
         if (victim.virtual_page_num >= 0 && static_cast<size_t>(victim.virtual_page_num) < pt.size()) {
@@ -217,12 +285,6 @@ void MemoryManager::write_to_backing_store(const std::string& proc_name, int pag
         }
 
         std::string formatted_line = ss.str();
-
-        // 1. Print to console indicating it's dumping to the backing store file
-        std::cout << "      [BACKING STORE DUMP] Writing page to " << BACKING_STORE_FILE 
-                  << " -> " << formatted_line << std::dec << std::endl;
-
-        // 2. Write to the file
         bs << formatted_line << "\n";
     }
 }
@@ -236,7 +298,6 @@ void MemoryManager::read_from_backing_store(const std::string& proc_name, int pa
     std::string line;
     std::string last_matching_line = "";
 
-    // Scan line-by-line to extract latest state of the page
     while (std::getline(bs, line)) {
         if (line.find(target_tag) == 0) {
             last_matching_line = line;
@@ -254,57 +315,6 @@ void MemoryManager::read_from_backing_store(const std::string& proc_name, int pa
     }
 }
 
-bool MemoryManager::allocateProcessMemory(Process& proc) {
-    // For a demand-paged system, initialization occurs during Process constructor.
-    // Return true if process memory size fits total system capabilities.
-    return proc.getMemorySize() <= max_overall_mem;
-}
-
-void MemoryManager::deallocateProcessMemory(Process& proc) {
-    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-    
-    // Invalidate process page table entries
-    auto& pt = proc.getPageTable();
-    for (auto& pte : pt) {
-        pte.valid = false;
-        pte.frame_number = -1;
-        pte.dirty = false;
-    }
-
-    // Evict all frames currently owned by this process
-    for (size_t i = 0; i < frame_table.size(); ++i) {
-        if (frame_table[i].process_ptr == &proc || frame_table[i].process_name == proc.getName()) {
-            frame_table[i].is_free = true;
-            frame_table[i].process_name = "";
-            frame_table[i].process_ptr = nullptr;
-            frame_table[i].virtual_page_num = -1;
-            frame_table[i].dirty = false;
-        }
-    }
-}
-
-void MemoryManager::deallocateProcessMemory(int pid) {
-    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-    
-    // Evict frames by PID if pointer is unavailable
-    for (size_t i = 0; i < frame_table.size(); ++i) {
-        if (frame_table[i].process_ptr && frame_table[i].process_ptr->getPID() == pid) {
-            auto& pt = frame_table[i].process_ptr->getPageTable();
-            for (auto& pte : pt) {
-                pte.valid = false;
-                pte.frame_number = -1;
-                pte.dirty = false;
-            }
-
-            frame_table[i].is_free = true;
-            frame_table[i].process_name = "";
-            frame_table[i].process_ptr = nullptr;
-            frame_table[i].virtual_page_num = -1;
-            frame_table[i].dirty = false;
-        }
-    }
-}
-
 void MemoryManager::trigger_memory_violation(Process& proc, uint16_t fault_addr) {
     auto now = std::chrono::system_clock::now();
     time_t tt = std::chrono::system_clock::to_time_t(now);
@@ -318,6 +328,5 @@ void MemoryManager::trigger_memory_violation(Process& proc, uint16_t fault_addr)
 
     char time_str[9];
     snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d", local_tm.tm_hour, local_tm.tm_min, local_tm.tm_sec);
-    
     proc.triggerMemoryViolation(fault_addr, std::string(time_str));
 }

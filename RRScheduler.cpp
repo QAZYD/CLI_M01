@@ -104,11 +104,6 @@ void RRScheduler::runLoop(int coreId) {
                     core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
                 }
 
-                // Register process memory space
-                if (memoryManager) {
-                    memoryManager->allocateProcessMemory(*core.currentProcess);
-                }
-
                 core.remainingDelayCycles = 0; 
                 core.quantumUsed = 0; 
                 wasActiveThisTick = true; // Mark as active for this cycle
@@ -121,9 +116,6 @@ void RRScheduler::runLoop(int coreId) {
                 // Guard check for processes waking up having already finished
                 if (core.currentProcess->isFinished()) {
                     core.currentProcess->setState(Process::FINISHED);
-                    if (memoryManager) {
-                        memoryManager->deallocateProcessMemory(*core.currentProcess);
-                    }
                     core.currentProcess->setAssignedCore(-1);
                     core.currentProcess = nullptr; 
                     core.quantumUsed = 0;
@@ -143,9 +135,6 @@ void RRScheduler::runLoop(int coreId) {
 
                     // CASE A: Memory Access Violation
                     if (core.currentProcess->getState() == Process::MEMORY_VIOLATION) {
-                        if (memoryManager) {
-                            memoryManager->deallocateProcessMemory(*core.currentProcess);
-                        }
                         core.currentProcess->setAssignedCore(-1);
                         core.currentProcess = nullptr; 
                         core.quantumUsed = 0;
@@ -153,9 +142,6 @@ void RRScheduler::runLoop(int coreId) {
                     // CASE B: Process finished execution entirely
                     else if (core.currentProcess->isFinished()) {
                         core.currentProcess->setState(Process::FINISHED);
-                        if (memoryManager) {
-                            memoryManager->deallocateProcessMemory(*core.currentProcess);
-                        }
                         core.currentProcess->setAssignedCore(-1);
                         core.currentProcess = nullptr; 
                         core.quantumUsed = 0;
@@ -205,6 +191,6 @@ void RRScheduler::runLoop(int coreId) {
 }
 
 int RRScheduler::getCPUCycles() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(tickMutex));
+    std::lock_guard<std::mutex> lock(tickMutex);
     return cpuCycles;
 }

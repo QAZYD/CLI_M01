@@ -1,4 +1,5 @@
 #include "coreDependencies/ProcessControl.h" 
+#include "memoryControl/MemoryManager.h"
 #include "coreDependencies/CommandGenerator.h"
 #include "ICommandChildren/SleepCommand.h" 
 #include "ICommandChildren/ForCommand.h"   
@@ -25,7 +26,7 @@ Process::Process(int pid, std::string name, int totalLines, std::mt19937& gen, b
       assignedCore(-1), 
       runStartTime("N/A"),
       totalInstructions(totalLines),
-      memorySize(memSize),            // Configured or defaulted memory size
+      memorySize(memSize),
       invalidAddress(0),
       errorTimestamp("")
 {
@@ -153,6 +154,27 @@ void Process::executeCurrentCommand(MemoryManager& memoryManager) {
 
     auto& currentFrame = executionStack.back();
     if (currentFrame.pc >= 0 && currentFrame.pc < static_cast<int>(currentFrame.instructions.size())) {
+        
+        // =========================================================
+        // DEMAND PAGING INTEGRATION
+        // =========================================================
+        uint32_t numPages = static_cast<uint32_t>(pageTable.size());
+        if (numPages > 0) {
+            // Map the current instruction line to a virtual page index
+            uint32_t page_num = (linesExecuted) % numPages;
+
+            // 1. Access the page (Triggers Page Fault -> Paged In counter + LRU Eviction if RAM full)
+            int frame_id = memoryManager.access_page(*this, page_num);
+
+            // 2. Mark frame dirty on access so eviction writes to backing store file
+            // (Or call memoryManager.write_uint16(*this, virt_addr, val) if simulating memory writes)
+            if (frame_id != -1) {
+                uint16_t simulated_virt_addr = static_cast<uint16_t>((linesExecuted * 2) % memorySize);
+                memoryManager.write_uint16(*this, simulated_virt_addr, 0x01);
+            }
+        }
+        // =========================================================
+
         auto currentCmd = currentFrame.instructions[currentFrame.pc];
         linesExecuted++;
 
@@ -186,8 +208,11 @@ void Process::executeCurrentCommand(MemoryManager& memoryManager) {
 }
 
 void Process::moveToNextLine() {
-    if (executionStack.empty()) {
-        currentState = FINISHED;
+    // FIX 3: Do not advance program counter if process encountered a memory fault or is finished
+    if (currentState == MEMORY_VIOLATION || currentState == FINISHED || executionStack.empty()) {
+        if (currentState != MEMORY_VIOLATION) {
+            currentState = FINISHED;
+        }
         return;
     }
 
@@ -207,10 +232,30 @@ void Process::moveToNextLine() {
         }
     }
 
-    if (executionStack.empty()) {
+    if (executionStack.empty() && currentState != MEMORY_VIOLATION) {
         currentState = FINISHED;
     }
 }
+
+// =========================================================
+// MEMORY & VIOLATION HANDLING (ADDED)
+// =========================================================
+
+void Process::triggerMemoryViolation(uint16_t faultAddr, const std::string& timestamp) {
+    currentState = MEMORY_VIOLATION;
+    invalidAddress = faultAddr;
+    errorTimestamp = timestamp;
+}
+
+uint32_t Process::getMemorySize() const { return memorySize; }
+
+std::vector<PageTableEntry>& Process::getPageTable() { return pageTable; }
+
+const std::vector<PageTableEntry>& Process::getPageTable() const { return pageTable; }
+
+uint16_t Process::getInvalidAddress() const { return invalidAddress; }
+
+std::string Process::getErrorTimestamp() const { return errorTimestamp; }
 
 // =========================================================
 // STATE ACCESSORS & GETTERS/SETTERS

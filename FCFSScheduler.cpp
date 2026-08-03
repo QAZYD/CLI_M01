@@ -7,7 +7,7 @@
 FCFSScheduler::FCFSScheduler(int cores, int delayCycles, std::shared_ptr<MemoryManager> memMgr) 
     : totalCores(cores), delayPerExec(delayCycles), memoryManager(memMgr), 
       isRunning(false), cpuCycles(0), activeWorkerCount(0),
-      activeCpuTicks(0), idleCpuTicks(0) { // <-- Initialize here
+      activeCpuTicks(0), idleCpuTicks(0) {
     if (totalCores <= 0) totalCores = 1; 
 }
 
@@ -54,7 +54,7 @@ void FCFSScheduler::masterClockLoop() {
         {
             std::unique_lock<std::mutex> lock(tickMutex);
             
-            // Wait until all worker cores finish their execution step for the current tick
+            // Wait until all worker cores finish their execution step for current tick
             tickCv.wait(lock, [this]() { 
                 return activeWorkerCount == 0 || !isRunning; 
             });
@@ -63,7 +63,7 @@ void FCFSScheduler::masterClockLoop() {
 
             cpuCycles++;
 
-            // Update all sleeping processes in the waiting list
+            // Update all sleeping processes in waiting list
             for (auto it = waitingList.begin(); it != waitingList.end(); ) {
                 (*it)->decrementSleepTicks(); 
                 
@@ -83,7 +83,7 @@ void FCFSScheduler::masterClockLoop() {
     }
 }
 
-// --- MULTI-THREADED CORE LOOP WITH MEMORY INTEGRATION & EXCEPTION SAFETY ---
+// --- MULTI-THREADED CORE LOOP WITH MEMORY INTEGRATION ---
 void FCFSScheduler::runLoop(int coreId) {
     CoreState core;
     int lastProcessedCycle = 0;
@@ -95,15 +95,13 @@ void FCFSScheduler::runLoop(int coreId) {
             return cpuCycles > lastProcessedCycle || !isRunning;
         });
 
-        // Break only if stopped AND no pending cycle needs tick accounting
         if (!isRunning && cpuCycles == lastProcessedCycle) break; 
         lastProcessedCycle = cpuCycles;
 
-        // Remember if this core was active BEFORE processing/finishing
         bool wasActiveThisTick = (core.currentProcess != nullptr);
 
         try {
-            // 1. Core Idle Check: Grab available process from readyQueue
+            // 1. Grab available process from readyQueue if core is idle
             if (!core.currentProcess && !readyQueue.empty()) {
                 core.currentProcess = readyQueue.front();
                 readyQueue.pop();
@@ -114,21 +112,14 @@ void FCFSScheduler::runLoop(int coreId) {
                     core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
                 }
 
-                if (memoryManager) {
-                    memoryManager->allocateProcessMemory(*core.currentProcess);
-                }
-
                 core.remainingDelayCycles = 0; 
-                wasActiveThisTick = true; // Mark as active for this cycle
+                wasActiveThisTick = true;
             }
 
             // 2. Core Execution Step
             if (core.currentProcess) {
                 if (core.currentProcess->isFinished()) {
                     core.currentProcess->setState(Process::FINISHED);
-                    if (memoryManager) {
-                        memoryManager->deallocateProcessMemory(*core.currentProcess);
-                    }
                     core.currentProcess->setAssignedCore(-1);
                     core.currentProcess = nullptr; 
                 }
@@ -136,6 +127,7 @@ void FCFSScheduler::runLoop(int coreId) {
                     core.remainingDelayCycles--;
                 } 
                 else {
+                    // Execute instruction with memory context
                     if (memoryManager) {
                         core.currentProcess->executeCurrentCommand(*memoryManager);
                     } else {
@@ -144,18 +136,13 @@ void FCFSScheduler::runLoop(int coreId) {
 
                     core.currentProcess->moveToNextLine();
 
+                    // Process State Handling
                     if (core.currentProcess->getState() == Process::MEMORY_VIOLATION) {
-                        if (memoryManager) {
-                            memoryManager->deallocateProcessMemory(*core.currentProcess);
-                        }
                         core.currentProcess->setAssignedCore(-1);
                         core.currentProcess = nullptr; 
                     } 
                     else if (core.currentProcess->isFinished()) {
                         core.currentProcess->setState(Process::FINISHED);
-                        if (memoryManager) {
-                            memoryManager->deallocateProcessMemory(*core.currentProcess);
-                        }
                         core.currentProcess->setAssignedCore(-1);
                         core.currentProcess = nullptr; 
                     } 
@@ -177,14 +164,14 @@ void FCFSScheduler::runLoop(int coreId) {
             std::cerr << "[Core " << coreId << " Unknown Exception]" << std::endl;
         }
 
-        // --- Accurate Tick Recording ---
+        // Accurately record core tick utilization
         if (wasActiveThisTick) {
             activeCpuTicks++;
         } else {
             idleCpuTicks++;
         }
 
-        // Guarantee activeWorkerCount decrement to prevent scheduler deadlocks
+        // Decrement worker count to unblock master clock thread
         activeWorkerCount--;
         if (activeWorkerCount == 0) {
             tickCv.notify_all();
@@ -193,6 +180,6 @@ void FCFSScheduler::runLoop(int coreId) {
 }
 
 int FCFSScheduler::getCPUCycles() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(tickMutex));
+    std::lock_guard<std::mutex> lock(tickMutex);
     return cpuCycles;
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdint>
 #include <mutex>
+#include <unordered_set> // Added for tracking allocated processes
 #include "memoryStructures.h"
 
 // Forward declaration to break header dependency loops
@@ -14,7 +15,9 @@ private:
     uint32_t max_overall_mem = 0;  // Total physical RAM in bytes
     uint32_t mem_per_frame = 0;    // Frame size in bytes
     uint32_t total_frames = 0;     // max_overall_mem / mem_per_frame
+    uint32_t current_allocated_mem = 0; // Tracks virtual RAM reserved by spawned processes
     
+    std::unordered_set<int> allocated_pids; // Tracks PIDs that have reserved virtual RAM
     std::vector<Frame> frame_table; // Global Physical RAM
     
     // Recursive mutex allows nested locking from the same thread without deadlocking

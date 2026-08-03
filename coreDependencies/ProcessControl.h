@@ -7,7 +7,9 @@
 #include "SymbolTable.h"
 #include "ICommand.h"
 #include "../memoryControl/memoryStructures.h"
-#include "../memoryControl/memoryManager.h"
+
+// Forward declaration to prevent circular dependency loops with MemoryManager.h
+class MemoryManager;
 
 class Process {
 public:
@@ -90,17 +92,13 @@ public:
     // =========================================================
     // MEMORY METRICS & ACCESSORS
     // =========================================================
-    uint32_t getMemorySize() const { return memorySize; }
-    std::vector<PageTableEntry>& getPageTable() { return pageTable; }
+    uint32_t getMemorySize() const;
+    std::vector<PageTableEntry>& getPageTable();
+    const std::vector<PageTableEntry>& getPageTable() const;
 
-    std::string getErrorTimestamp() const { return errorTimestamp; }
-    uint16_t getInvalidAddress() const { return invalidAddress; }
-    
-    void triggerMemoryViolation(uint16_t address, const std::string& timestamp) {
-        currentState = MEMORY_VIOLATION;
-        invalidAddress = address;
-        errorTimestamp = timestamp;
-    }
+    std::string getErrorTimestamp() const;
+    uint16_t getInvalidAddress() const;
+    void triggerMemoryViolation(uint16_t address, const std::string& timestamp);
 
 private:
     int pid;
