@@ -22,7 +22,7 @@ void MemoryManager::initialize(uint32_t total_mem, uint32_t frame_size) {
     current_tick = 0;
 
     // Initialize / Truncate backing store file upon startup
-    std::ofstream bs(BACKING_STORE_FILE, std::ios::app);
+    std::ofstream bs(BACKING_STORE_FILE, std::ios::out | std::ios::trunc);
     bs.close();
 }
 
@@ -63,55 +63,77 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
     read_from_backing_store(proc.getName(), page_num, target_frame.buffer);
 
     // Update process page table
-    page_table[page_num].valid = true;
-    page_table[page_num].frame_number = allocated_frame_id;
+    if (page_num < page_table.size()) {
+        page_table[page_num].valid = true;
+        page_table[page_num].frame_number = allocated_frame_id;
+    }
 
     return allocated_frame_id;
 }
 
 bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t value) {
     // Bounds Check: Out of Bounds Access Check
-    if (virt_addr + 1 >= proc.getMemorySize()) {
+    if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         trigger_memory_violation(proc, virt_addr);
         return false;
     }
 
-    uint32_t page_num = virt_addr / mem_per_frame;
-    uint32_t offset = virt_addr % mem_per_frame;
+    if (mem_per_frame == 0) return false;
 
-    int frame_id = access_page(proc, page_num);
+    // Byte 0
+    uint32_t page0 = virt_addr / mem_per_frame;
+    uint32_t offset0 = virt_addr % mem_per_frame;
+    int frame0 = access_page(proc, page0);
+
+    // Byte 1 (Handles cross-page boundaries safely)
+    uint16_t addr1 = virt_addr + 1;
+    uint32_t page1 = addr1 / mem_per_frame;
+    uint32_t offset1 = addr1 % mem_per_frame;
 
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-    Frame& frame = frame_table[frame_id];
 
-    // Store 16-bit integer as 2 bytes (Little-Endian)
-    frame.buffer[offset] = static_cast<uint8_t>(value & 0xFF);
-    frame.buffer[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+    // Write Byte 0
+    frame_table[frame0].buffer[offset0] = static_cast<uint8_t>(value & 0xFF);
+    frame_table[frame0].dirty = true;
+    proc.getPageTable()[page0].dirty = true;
 
-    frame.dirty = true;
-    proc.getPageTable()[page_num].dirty = true;
+    // Write Byte 1
+    int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
+    frame_table[frame1].buffer[offset1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+    frame_table[frame1].dirty = true;
+    proc.getPageTable()[page1].dirty = true;
 
     return true;
 }
 
 bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out_value) {
     // Bounds Check: Out of Bounds Access Check
-    if (virt_addr + 1 >= proc.getMemorySize()) {
+    if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         trigger_memory_violation(proc, virt_addr);
         return false;
     }
 
-    uint32_t page_num = virt_addr / mem_per_frame;
-    uint32_t offset = virt_addr % mem_per_frame;
+    if (mem_per_frame == 0) return false;
 
-    int frame_id = access_page(proc, page_num);
+    // Byte 0
+    uint32_t page0 = virt_addr / mem_per_frame;
+    uint32_t offset0 = virt_addr % mem_per_frame;
+    int frame0 = access_page(proc, page0);
+
+    // Byte 1 (Handles cross-page boundaries safely)
+    uint16_t addr1 = virt_addr + 1;
+    uint32_t page1 = addr1 / mem_per_frame;
+    uint32_t offset1 = addr1 % mem_per_frame;
 
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
-    Frame& frame = frame_table[frame_id];
+
+    uint8_t low_byte = frame_table[frame0].buffer[offset0];
+
+    int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
+    uint8_t high_byte = frame_table[frame1].buffer[offset1];
 
     // Reconstruct 16-bit uint from 2 bytes
-    out_value = static_cast<uint16_t>(frame.buffer[offset]) |
-                (static_cast<uint16_t>(frame.buffer[offset + 1]) << 8);
+    out_value = static_cast<uint16_t>(low_byte) | (static_cast<uint16_t>(high_byte) << 8);
 
     return true;
 }
@@ -152,7 +174,7 @@ int MemoryManager::select_victim_frame_lru() {
     uint64_t oldest = UINT64_MAX;
     int victim_id = 0;
     for (size_t i = 0; i < frame_table.size(); ++i) {
-        if (frame_table[i].last_accessed_tick < oldest) {
+        if (!frame_table[i].is_free && frame_table[i].last_accessed_tick < oldest) {
             oldest = frame_table[i].last_accessed_tick;
             victim_id = static_cast<int>(i);
         }
@@ -184,6 +206,7 @@ void MemoryManager::evict_frame(int frame_id) {
     victim.virtual_page_num = -1;
     victim.dirty = false;
 }
+
 void MemoryManager::write_to_backing_store(const std::string& proc_name, int page_num, const std::vector<uint8_t>& buffer) {
     std::ofstream bs(BACKING_STORE_FILE, std::ios::app);
     if (bs.is_open()) {
@@ -203,6 +226,7 @@ void MemoryManager::write_to_backing_store(const std::string& proc_name, int pag
         bs << formatted_line << "\n";
     }
 }
+
 void MemoryManager::read_from_backing_store(const std::string& proc_name, int page_num, std::vector<uint8_t>& buffer) {
     std::fill(buffer.begin(), buffer.end(), 0);
     std::ifstream bs(BACKING_STORE_FILE);
@@ -226,6 +250,57 @@ void MemoryManager::read_from_backing_store(const std::string& proc_name, int pa
         size_t idx = 0;
         while (ss >> byte_str && idx < buffer.size()) {
             buffer[idx++] = static_cast<uint8_t>(std::stoul(byte_str, nullptr, 16));
+        }
+    }
+}
+
+bool MemoryManager::allocateProcessMemory(Process& proc) {
+    // For a demand-paged system, initialization occurs during Process constructor.
+    // Return true if process memory size fits total system capabilities.
+    return proc.getMemorySize() <= max_overall_mem;
+}
+
+void MemoryManager::deallocateProcessMemory(Process& proc) {
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+    
+    // Invalidate process page table entries
+    auto& pt = proc.getPageTable();
+    for (auto& pte : pt) {
+        pte.valid = false;
+        pte.frame_number = -1;
+        pte.dirty = false;
+    }
+
+    // Evict all frames currently owned by this process
+    for (size_t i = 0; i < frame_table.size(); ++i) {
+        if (frame_table[i].process_ptr == &proc || frame_table[i].process_name == proc.getName()) {
+            frame_table[i].is_free = true;
+            frame_table[i].process_name = "";
+            frame_table[i].process_ptr = nullptr;
+            frame_table[i].virtual_page_num = -1;
+            frame_table[i].dirty = false;
+        }
+    }
+}
+
+void MemoryManager::deallocateProcessMemory(int pid) {
+    std::lock_guard<std::recursive_mutex> lock(mem_mutex);
+    
+    // Evict frames by PID if pointer is unavailable
+    for (size_t i = 0; i < frame_table.size(); ++i) {
+        if (frame_table[i].process_ptr && frame_table[i].process_ptr->getPID() == pid) {
+            auto& pt = frame_table[i].process_ptr->getPageTable();
+            for (auto& pte : pt) {
+                pte.valid = false;
+                pte.frame_number = -1;
+                pte.dirty = false;
+            }
+
+            frame_table[i].is_free = true;
+            frame_table[i].process_name = "";
+            frame_table[i].process_ptr = nullptr;
+            frame_table[i].virtual_page_num = -1;
+            frame_table[i].dirty = false;
         }
     }
 }

@@ -1,6 +1,8 @@
 @echo off
 
 g++ test_all.cpp ^
+FCFSScheduler.cpp ^
+RRScheduler.cpp ^
 MemoryManager.cpp ^
 ProcessControl.cpp ^
 SymbolTable.cpp ^
@@ -9,7 +11,7 @@ configManager.cpp ^
 ICommand.cpp ^
 ScreenSpawnerCommand.cpp ^
 InitializeCommand.cpp ^
--I. -IcoreDependencies -o test_all
+-I. -IcoreDependencies -std=c++17 -o test_all
 
 if %errorlevel% neq 0 (
     echo Build Failed

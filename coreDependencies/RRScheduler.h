@@ -10,10 +10,12 @@
 #include "IScheduler.h"
 #include "ProcessControl.h" 
 
-class RRScheduler : public IScheduler{
+class MemoryManager; // Forward declaration
+
+class RRScheduler : public IScheduler {
 public:
-    // Added timeQuantum to constructor parameters
-    RRScheduler(int cores, int delayCycles, int timeQuantum);
+    // Added memMgr parameter (defaults to nullptr for backward compatibility)
+    RRScheduler(int cores, int delayCycles, int timeQuantum, std::shared_ptr<MemoryManager> memMgr = nullptr);
     ~RRScheduler();
 
     void start() override;
@@ -30,12 +32,13 @@ private:
         std::shared_ptr<Process> currentProcess = nullptr;
         int remainingDelayCycles = 0;
         int quantumUsed = 0; // Tracks how many cycles the current process has been running
-        bool processingDoneForCurrentCycle = false;
     };
 
     int totalCores;
     int delayPerExec;   // Execution delay in CPU cycles
     int timeQuantum;    // Maximum cycles a process can hold the CPU before preemption
+    std::shared_ptr<MemoryManager> memoryManager;
+
     bool isRunning;
     int cpuCycles;      // Central tick counter
 
@@ -46,7 +49,7 @@ private:
     std::vector<std::shared_ptr<Process>> waitingList;
     
     // Synchronization primitives for the cycle ticks
-    std::mutex tickMutex;
+    mutable std::mutex tickMutex;
     std::condition_variable tickCv;
     int activeWorkerCount;
 

@@ -1,8 +1,10 @@
 #include "coreDependencies/RRScheduler.h"
+#include "memoryControl/MemoryManager.h"
 #include <iostream>
+#include <chrono>
 
-RRScheduler::RRScheduler(int cores, int delayCycles, int quantum) 
-    : totalCores(cores), delayPerExec(delayCycles), timeQuantum(quantum), 
+RRScheduler::RRScheduler(int cores, int delayCycles, int timeQuantum, std::shared_ptr<MemoryManager> memMgr) 
+    : totalCores(cores), delayPerExec(delayCycles), timeQuantum(timeQuantum), memoryManager(memMgr),
       isRunning(false), cpuCycles(0), activeWorkerCount(0) {
     if (totalCores <= 0) totalCores = 1; 
 }
@@ -68,6 +70,7 @@ void RRScheduler::masterClockLoop() {
     }
 }
 
+// --- MULTI-THREADED CORE LOOP WITH QUANTUM PREEMPTION & DEMAND PAGING ---
 void RRScheduler::runLoop(int coreId) {
     CoreState core;
     int lastProcessedCycle = 0;
@@ -82,55 +85,104 @@ void RRScheduler::runLoop(int coreId) {
         if (!isRunning) break;
         lastProcessedCycle = cpuCycles;
 
-        // 1. Core Idle Check: Grab a process if empty
-        if (!core.currentProcess && !readyQueue.empty()) {
-            core.currentProcess = readyQueue.front();
-            readyQueue.pop();
-            
-            core.currentProcess->setAssignedCore(coreId);
-            if (core.currentProcess->getRunStartTime() == "N/A") {
-                core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
+        try {
+            // 1. Core Idle Check: Grab available process from readyQueue
+            if (!core.currentProcess && !readyQueue.empty()) {
+                core.currentProcess = readyQueue.front();
+                readyQueue.pop();
+                
+                core.currentProcess->setAssignedCore(coreId);
+                core.currentProcess->setState(Process::RUNNING);
+
+                if (core.currentProcess->getRunStartTime() == "N/A") {
+                    core.currentProcess->setRunStartTime(core.currentProcess->captureCurrentTimestamp());
+                }
+
+                // Register process memory space
+                if (memoryManager) {
+                    memoryManager->allocateProcessMemory(*core.currentProcess);
+                }
+
+                core.remainingDelayCycles = 0; 
+                core.quantumUsed = 0; 
             }
-            core.remainingDelayCycles = 0; 
-            core.quantumUsed = 0; 
-        }
 
-        // 2. Core Execution Step
-        if (core.currentProcess) {
-            core.quantumUsed++;
+            // 2. Core Execution Step
+            if (core.currentProcess) {
+                core.quantumUsed++;
 
-            if (core.remainingDelayCycles > 0) {
-                core.remainingDelayCycles--;
-            } else {
-                core.currentProcess->executeCurrentCommand();
-                core.currentProcess->moveToNextLine();
-
-                // Case A: Process finished execution entirely
+                // Guard check for processes waking up having already finished
                 if (core.currentProcess->isFinished()) {
+                    core.currentProcess->setState(Process::FINISHED);
+                    if (memoryManager) {
+                        memoryManager->deallocateProcessMemory(*core.currentProcess);
+                    }
+                    core.currentProcess->setAssignedCore(-1);
                     core.currentProcess = nullptr; 
                     core.quantumUsed = 0;
+                }
+                else if (core.remainingDelayCycles > 0) {
+                    core.remainingDelayCycles--;
                 } 
-                // Case B: Process explicitly called SLEEP (Relinquish Core)
-                else if (core.currentProcess->getState() == Process::WAITING) {
-                    core.currentProcess->setAssignedCore(-1);
-                    waitingList.push_back(core.currentProcess); 
-                    core.currentProcess = nullptr; // Evict from core
-                    core.quantumUsed = 0;          // Clear out the quantum counter
-                } 
-                // Case C: Round-Robin Time Quantum Expiration (Preemption)
-                else if (core.quantumUsed >= timeQuantum) {
-                    core.currentProcess->setAssignedCore(-1); 
-                    readyQueue.push(core.currentProcess);     
-                    core.currentProcess = nullptr; 
-                    core.quantumUsed = 0; 
-                } 
-                // Case D: Retain process, enforce regular busy-wait delay execution step
                 else {
-                    core.remainingDelayCycles = delayPerExec; 
+                    // Execute current instruction safely passing MemoryManager context
+                    if (memoryManager) {
+                        core.currentProcess->executeCurrentCommand(*memoryManager);
+                    } else {
+                        core.currentProcess->executeCurrentCommand();
+                    }
+
+                    core.currentProcess->moveToNextLine();
+
+                    // CASE A: Memory Access Violation
+                    if (core.currentProcess->getState() == Process::MEMORY_VIOLATION) {
+                        if (memoryManager) {
+                            memoryManager->deallocateProcessMemory(*core.currentProcess);
+                        }
+                        core.currentProcess->setAssignedCore(-1);
+                        core.currentProcess = nullptr; 
+                        core.quantumUsed = 0;
+                    } 
+                    // CASE B: Process finished execution entirely
+                    else if (core.currentProcess->isFinished()) {
+                        core.currentProcess->setState(Process::FINISHED);
+                        if (memoryManager) {
+                            memoryManager->deallocateProcessMemory(*core.currentProcess);
+                        }
+                        core.currentProcess->setAssignedCore(-1);
+                        core.currentProcess = nullptr; 
+                        core.quantumUsed = 0;
+                    } 
+                    // CASE C: Process called SLEEP (Relinquish Core)
+                    else if (core.currentProcess->getState() == Process::WAITING) {
+                        core.currentProcess->setAssignedCore(-1);
+                        waitingList.push_back(core.currentProcess); 
+                        core.currentProcess = nullptr; 
+                        core.quantumUsed = 0; 
+                    } 
+                    // CASE D: Time Quantum Expiration (Preemption)
+                    else if (core.quantumUsed >= timeQuantum) {
+                        core.currentProcess->setAssignedCore(-1); 
+                        core.currentProcess->setState(Process::READY);
+                        readyQueue.push(core.currentProcess);     
+                        core.currentProcess = nullptr; // Evicted from core, retains RAM
+                        core.quantumUsed = 0; 
+                    } 
+                    // CASE E: Retain process on core for next instruction step
+                    else {
+                        core.remainingDelayCycles = delayPerExec; 
+                    }
                 }
             }
         }
+        catch (const std::exception& e) {
+            std::cerr << "[RR Core " << coreId << " Exception]: " << e.what() << std::endl;
+        }
+        catch (...) {
+            std::cerr << "[RR Core " << coreId << " Unknown Exception]" << std::endl;
+        }
 
+        // Guarantee activeWorkerCount decrement to prevent lockup
         activeWorkerCount--;
         if (activeWorkerCount == 0) {
             tickCv.notify_all();
@@ -139,6 +191,6 @@ void RRScheduler::runLoop(int coreId) {
 }
 
 int RRScheduler::getCPUCycles() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(tickMutex));
+    std::lock_guard<std::mutex> lock(tickMutex);
     return cpuCycles;
 }

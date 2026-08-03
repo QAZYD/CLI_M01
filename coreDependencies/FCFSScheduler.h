@@ -18,6 +18,7 @@ public:
     void start() override;
     void stop() override;
     void pushProcess(std::shared_ptr<Process> process) override;
+    FCFSScheduler(int cores, int delayCycles, std::shared_ptr<MemoryManager> memMgr);
     int getCPUCycles() const override;
     
     int getTotalCores() const override{ 
@@ -33,6 +34,7 @@ private:
 
     int totalCores;
     int delayPerExec; // Execution delay in CPU cycles
+    std::shared_ptr<MemoryManager> memoryManager;
     bool isRunning;
     int cpuCycles;    // Central tick counter
 

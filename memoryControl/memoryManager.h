@@ -14,7 +14,7 @@ private:
     uint32_t max_overall_mem = 0;  // Total physical RAM in bytes
     uint32_t mem_per_frame = 0;    // Frame size in bytes
     uint32_t total_frames = 0;     // max_overall_mem / mem_per_frame
-
+    
     std::vector<Frame> frame_table; // Global Physical RAM
     
     // Recursive mutex allows nested locking from the same thread without deadlocking
@@ -45,6 +45,11 @@ public:
     uint32_t getFreeMemory() const;
     uint64_t getPagesPagedIn() const;
     uint64_t getPagesPagedOut() const;
+
+    // Process lifecycle memory management methods:
+    bool allocateProcessMemory(Process& proc);
+    void deallocateProcessMemory(Process& proc);
+    void deallocateProcessMemory(int pid);
 
 private:
     int find_free_frame();
