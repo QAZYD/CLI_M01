@@ -163,12 +163,12 @@ bool ScreenSpawnerCommand::execute(const std::string& rawInput, const Initialize
     }
 
     std::stringstream ss(rawInput);
-    std::string baseCmd, flag, processName;
+    std::string baseCmd, flag, processName, memorySizeToken;
 
-    // Parse specific token pattern layout: "screen" "-s" "<process_name>"
-    ss >> baseCmd >> flag >> processName;
+    // Extract all 4 tokens universally: "screen" "-s/-c" "<process_name>" "<memory_size>"
+    ss >> baseCmd >> flag >> processName >> memorySizeToken;
 
-    if (baseCmd != "screen" || processName.empty()) {
+    if (baseCmd != "screen" || processName.empty() || memorySizeToken.empty()) {
         return false;
     }
 
@@ -179,20 +179,22 @@ bool ScreenSpawnerCommand::execute(const std::string& rawInput, const Initialize
     int totalLines = 0;
     bool customInstructionsMode = false;
 
+    // Safely convert the memory size for both -s and -c flags
+    try {
+        memorySize = static_cast<uint32_t>(std::stoul(memorySizeToken));
+    } catch (...) {
+        // main.cpp already printed the error, so we just quietly back out
+        return false; 
+    }
+
+    if (memorySize < config.minMemPerProc || memorySize > config.maxMemPerProc) {
+        std::cout << "Error: Memory size " << memorySize
+            << " out of bounds (Min: " << config.minMemPerProc
+            << ", Max: " << config.maxMemPerProc << ")." << std::endl;
+        return false;
+    }
+
     if (flag == "-c") {
-        std::string memorySizeToken;
-        if (!(ss >> memorySizeToken)) {
-            std::cout << "invalid command" << std::endl;
-            return false;
-        }
-
-        try {
-            memorySize = static_cast<uint32_t>(std::stoul(memorySizeToken));
-        } catch (...) {
-            std::cout << "invalid command" << std::endl;
-            return false;
-        }
-
         std::string rest;
         std::getline(ss, rest);
         rest = trim(rest);
@@ -245,7 +247,6 @@ const std::vector<std::shared_ptr<Process>>& ScreenSpawnerCommand::getFinishedHi
     std::lock_guard<std::mutex> lock(listMutex); // Safe access to history too
     return finishedHistory;
 }
-
 
 void ScreenSpawnerCommand::cleanupFinishedProcesses() {
     // Acquire the lock for the entire duration of the cleanup operation

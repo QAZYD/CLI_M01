@@ -17,6 +17,11 @@ namespace ProcessLogger {
     void printProcessReport(Process& process);
 }
 
+// Check if num is power of 2
+bool isPowerOfTwo(int n) {
+    return (n > 0) && ((n & (n - 1)) == 0);
+}
+
 int main() {
     InitializeCommand initHandler("config.txt"); 
     ScreenSpawnerCommand spawnerHandler; 
@@ -91,8 +96,18 @@ int main() {
                         lastTriggeredCycle = currentCycles - (currentCycles % batchProcessFreq);
                         generatedProcessCount++;
 
-                        // Build command parameter string matching screen -s syntax rule
-                        std::string mockCommand = "screen -s dummy_p" + std::to_string(generatedProcessCount);
+                        // Roll a random memory size using the config bounds
+                        std::uniform_int_distribution<int> memDist(initHandler.getConfig().minMemPerProc, initHandler.getConfig().maxMemPerProc);
+                        int randomMem = memDist(gen);
+                        
+                        // Force the rolled number to the nearest power of 2 to pass validation
+                        int powerOfTwoMem = 64; 
+                        while (powerOfTwoMem < randomMem && powerOfTwoMem < 65536) {
+                            powerOfTwoMem *= 2;
+                        }
+
+                        // Build command parameter string matching the NEW screen -s syntax rule
+                        std::string mockCommand = "screen -s dummy_p" + std::to_string(generatedProcessCount) + " " + std::to_string(powerOfTwoMem);
 
                         // Safe-guard name validation tracking list
                         bool nameTaken = false;
@@ -206,9 +221,16 @@ int main() {
                 for (const auto& proc : processList) {
                     if (proc->getName() == targetName) {
                         found = true;
-                        if (!proc->isFinished()) {
-                            targetProcess = proc; // Found it and it's still running!
-                        } else {
+                        
+                        // Check if the process encountered a memory violation error state
+                        if (proc->getState() == Process::MEMORY_VIOLATION) {
+                            std::cout << "Error: Process '" << targetName 
+                                      << "' encountered a memory access violation and cannot be resumed.\n";
+                        } 
+                        else if (!proc->isFinished()) {
+                            targetProcess = proc; // Found and safe to reattach
+                        } 
+                        else {
                             std::cout << "Error: Process '" << targetName << "' has already finished execution.\n";
                         }
                         break;  
@@ -226,8 +248,34 @@ int main() {
                 // --- CASE B: SPAWN A BRAND NEW PROCESS AND SCREEN (-s) ---
                 
                 std::stringstream ss(userInput);
-                std::string baseCmd, flag, newProcessName;
-                ss >> baseCmd >> flag >> newProcessName;
+                std::string baseCmd, flag, newProcessName, memSizeStr;
+                ss >> baseCmd >> flag >> newProcessName >> memSizeStr;
+                // 1. Parse and validate the memory size
+                int memorySize = 0;
+                try {
+                    memorySize = std::stoi(memSizeStr);
+                } catch (...) {
+                    std::cout << "invalid memory allocation\n";
+                    continue; 
+                }
+
+                if (memorySize < 64 || memorySize > 65536 || !isPowerOfTwo(memorySize)) {
+                    std::cout << "invalid memory allocation\n";
+                    continue;
+                }
+
+                // 2. If it's a -c command, validate that instructions exist inside quotes
+                if (flag == "-c") {
+                    size_t firstQuote = userInput.find_first_of("\"");
+                    size_t lastQuote = userInput.find_last_of("\"");
+                    
+                    if (firstQuote == std::string::npos || lastQuote == std::string::npos || firstQuote >= lastQuote) {
+                        std::cout << "invalid command\n";
+                        continue;
+                    }
+                }
+                
+                // 3. Name check (Keep your existing name Taken logic here)
 
                 bool nameTaken = false;
                 const auto& processList = spawnerHandler.getActiveProcesses();
