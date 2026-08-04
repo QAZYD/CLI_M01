@@ -90,26 +90,29 @@ int main() {
             generatorThread = std::thread([&] {
                 int lastTriggeredCycle = 0;
                 
-                // Fetch bounds from configuration
-                int minMem = initHandler.getConfig().minMemPerProc;
-                int maxMem = initHandler.getConfig().maxMemPerProc;
+// Fetch bounds from configuration
+int minMem = initHandler.getConfig().minMemPerProc;
+int maxMem = initHandler.getConfig().maxMemPerProc;
 
-                // Calculate power-of-2 exponent bounds (e.g., 512 -> 2^9)
-                int minExp = 6;  // Default fallback 64 bytes (2^6)
-                int maxExp = 16; // Default fallback 65536 bytes (2^16)
+// Safe helper lambda to get base-2 exponent (e.g., 8 -> 3, 256 -> 8)
+auto getExponent = [](int val) {
+    int exp = 0;
+    while (val > 1) {
+        val >>= 1;
+        exp++;
+    }
+    return exp;
+};
 
-                if (minMem >= 64) {
-                    minExp = 0;
-                    int temp = minMem;
-                    while (temp > 1) { temp >>= 1; minExp++; }
-                }
-                if (maxMem >= minMem) {
-                    maxExp = 0;
-                    int temp = maxMem;
-                    while (temp > 1) { temp >>= 1; maxExp++; }
-                }
+int minExp = getExponent(minMem);
+int maxExp = getExponent(maxMem);
 
-                std::uniform_int_distribution<int> memExponentDist(minExp, maxExp);
+// Safety guard: ensure minExp never exceeds maxExp
+if (minExp > maxExp) {
+    std::swap(minExp, maxExp);
+}
+
+std::uniform_int_distribution<int> memExponentDist(minExp, maxExp);
 
                 while (isGeneratingBatch) {
                     int currentCycles = scheduler->getCPUCycles();
