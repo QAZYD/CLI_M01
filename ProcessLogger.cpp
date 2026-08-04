@@ -16,16 +16,16 @@ namespace ProcessLogger {
         
         std::cout << "Logs:\n";
 
-        int core = process.getAssignedCore();
         const auto& executedInstructions = process.getCommandLogs();
 
         // Loop through and print the pure instruction logs
         for (const auto& logEntry : executedInstructions) {
+            // Use logEntry.coreId instead of process.getAssignedCore()!
+            std::string coreStr = (logEntry.coreId == -1) ? "N/A" : std::to_string(logEntry.coreId);
+
             std::cout << " (" << logEntry.timestamp << ") "
-                      << "CORE: " << (core == -1 ? "N/A" : std::to_string(core)) << " "
+                      << "CORE: " << coreStr << " "
                       << "<" << logEntry.commandText << ">\n";
         }
-
-
     }
 }

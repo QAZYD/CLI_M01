@@ -86,17 +86,29 @@ std::shared_ptr<ICommand> buildInstruction(const std::string& instructionText) {
         return std::make_shared<ReadCommand>(varName, addressToken);
     }
 
-    if (upper.rfind("PRINT(", 0) == 0) {
-        if (instruction.size() < 7 || instruction.back() != ')') return nullptr;
-        std::string inner = instruction.substr(6, instruction.size() - 7);
-        std::size_t plusPos = inner.find('+');
-        if (plusPos == std::string::npos) {
-            return std::make_shared<PrintCommand>(stripWrappingQuotes(inner));
+if (upper.rfind("PRINT(", 0) == 0) {
+    if (instruction.size() < 7 || instruction.back() != ')') return nullptr;
+    std::string inner = instruction.substr(6, instruction.size() - 7);
+    std::size_t plusPos = inner.find('+');
+
+    if (plusPos == std::string::npos) {
+        std::string trimmedInner = trim(inner);
+        
+        // If it starts and ends with quotes, it's a string literal e.g. PRINT("Hello")
+        if (trimmedInner.size() >= 2 && trimmedInner.front() == '"' && trimmedInner.back() == '"') {
+            return std::make_shared<PrintCommand>(stripWrappingQuotes(trimmedInner), "");
+        } 
+        // Otherwise, it's a variable name e.g. PRINT(varA)
+        else {
+            return std::make_shared<PrintCommand>("", trimmedInner);
         }
-        std::string lhs = trim(inner.substr(0, plusPos));
-        std::string rhs = trim(inner.substr(plusPos + 1));
-        return std::make_shared<PrintCommand>(stripWrappingQuotes(lhs), stripWrappingQuotes(rhs));
     }
+
+    // Concatenation style e.g. PRINT("Result: " + varA)
+    std::string lhs = trim(inner.substr(0, plusPos));
+    std::string rhs = trim(inner.substr(plusPos + 1));
+    return std::make_shared<PrintCommand>(stripWrappingQuotes(lhs), stripWrappingQuotes(rhs));
+}
 
     return nullptr;
 }
@@ -165,34 +177,51 @@ bool ScreenSpawnerCommand::execute(const std::string& rawInput, const Initialize
     int totalLines = 0;
     bool customInstructionsMode = false;
 
-    if (flag == "-c") {
-        std::string memorySizeToken;
-        if (!(ss >> memorySizeToken)) {
-            std::cout << "invalid command" << std::endl;
-            return false;
-        }
-
-        try {
-            memorySize = static_cast<uint32_t>(std::stoul(memorySizeToken));
-        } catch (...) {
-            std::cout << "invalid command" << std::endl;
-            return false;
-        }
-
-        // Validate memory bounds and power-of-two for custom mode
-        if (memorySize < config.minMemPerProc || memorySize > config.maxMemPerProc || !isPowerOfTwo(memorySize)) {
-            std::cout << "invalid memory allocation" << std::endl;
-            return false;
-        }
-
+if (flag == "-c") {
         std::string rest;
         std::getline(ss, rest);
         rest = trim(rest);
 
+        if (rest.empty()) {
+            std::cout << "invalid command" << std::endl;
+            return false;
+        }
+
+        // Peek at the first token to see if an explicit memory size was provided
+        std::string firstToken;
+        std::stringstream restSS(rest);
+        restSS >> firstToken;
+
+        // Check if firstToken consists entirely of digits
+        bool isNumeric = !firstToken.empty() && 
+                         std::all_of(firstToken.begin(), firstToken.end(), [](unsigned char c) { return std::isdigit(c); });
+
+        if (isNumeric) {
+            try {
+                memorySize = static_cast<uint32_t>(std::stoul(firstToken));
+            } catch (...) {
+                std::cout << "invalid command" << std::endl;
+                return false;
+            }
+
+            // Validate memory bounds and power-of-two
+            if (memorySize < config.minMemPerProc || memorySize > config.maxMemPerProc || !isPowerOfTwo(memorySize)) {
+                std::cout << "invalid memory allocation" << std::endl;
+                return false;
+            }
+
+            // Strip the memory size token from the rest of the string
+            rest = trim(rest.substr(firstToken.size()));
+        } else {
+            // No memory size supplied: default to minMemPerProc from config
+            memorySize = config.minMemPerProc;
+        }
+
+        // Extract the instruction payload wrapped in quotes
         std::string instructionText;
-        if (!rest.empty() && rest[0] == '"') {
+        if (!rest.empty() && rest.front() == '"') {
             rest = rest.substr(1);
-            auto quotePos = rest.find('"');
+            auto quotePos = rest.rfind('"'); // Find the LAST closing quote
             if (quotePos == std::string::npos) {
                 std::cout << "invalid command" << std::endl;
                 return false;

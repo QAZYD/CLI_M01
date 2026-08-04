@@ -99,6 +99,22 @@ void Process::executeCurrentCommand() {
         auto currentCmd = currentFrame.instructions[currentFrame.pc];
         linesExecuted++;
 
+        // ---------------------------------------------------------
+        // 1. EXECUTE COMMAND FIRST (Evaluates PrintCommand variables)
+        // ---------------------------------------------------------
+        if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
+            this->sleep(sleepCmd->getTicks());
+        } 
+        else if (auto forCmd = std::dynamic_pointer_cast<ForCommand>(currentCmd)) {
+            this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
+        } 
+        else {
+            currentCmd->execute(symbolTable);
+        }
+
+        // ---------------------------------------------------------
+        // 2. LOG ENTRY SECOND (toString() now yields evaluated result)
+        // ---------------------------------------------------------
         std::string exactTime = captureCurrentTimestamp();
         int currentLine = getCurrentInstructionLine(); 
         int limitLines = getTotalLines();
@@ -114,15 +130,6 @@ void Process::executeCurrentCommand() {
         commandLogs.push_back(entry);
         executionHistory.push_back(entry);
 
-        if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
-            this->sleep(sleepCmd->getTicks());
-        } 
-        else if (auto forCmd = std::dynamic_pointer_cast<ForCommand>(currentCmd)) {
-            this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
-        } 
-        else {
-            currentCmd->execute(symbolTable);
-        }
     } else {
         currentState = FINISHED;
     }
@@ -167,7 +174,6 @@ void Process::executeCurrentCommand(MemoryManager& memoryManager) {
             int frame_id = memoryManager.access_page(*this, page_num);
 
             // 2. Mark frame dirty on access so eviction writes to backing store file
-            // (Or call memoryManager.write_uint16(*this, virt_addr, val) if simulating memory writes)
             if (frame_id != -1) {
                 uint16_t simulated_virt_addr = static_cast<uint16_t>((linesExecuted * 2) % memorySize);
                 memoryManager.write_uint16(*this, simulated_virt_addr, 0x01);
@@ -178,6 +184,22 @@ void Process::executeCurrentCommand(MemoryManager& memoryManager) {
         auto currentCmd = currentFrame.instructions[currentFrame.pc];
         linesExecuted++;
 
+        // ---------------------------------------------------------
+        // 1. EXECUTE COMMAND FIRST (Evaluates PrintCommand variables)
+        // ---------------------------------------------------------
+        if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
+            this->sleep(sleepCmd->getTicks());
+        } 
+        else if (auto forCmd = std::dynamic_pointer_cast<ForCommand>(currentCmd)) {
+            this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
+        } 
+        else {
+            currentCmd->execute(*this, memoryManager);
+        }
+
+        // ---------------------------------------------------------
+        // 2. LOG ENTRY SECOND (toString() now yields evaluated result)
+        // ---------------------------------------------------------
         std::string exactTime = captureCurrentTimestamp();
         int currentLine = getCurrentInstructionLine(); 
         int limitLines = getTotalLines();
@@ -193,22 +215,12 @@ void Process::executeCurrentCommand(MemoryManager& memoryManager) {
         commandLogs.push_back(entry);
         executionHistory.push_back(entry);
 
-        if (auto sleepCmd = std::dynamic_pointer_cast<SleepCommand>(currentCmd)) {
-            this->sleep(sleepCmd->getTicks());
-        } 
-        else if (auto forCmd = std::dynamic_pointer_cast<ForCommand>(currentCmd)) {
-            this->pushLoopFrame(forCmd->getInstructions(), forCmd->getRepeats());
-        } 
-        else {
-            currentCmd->execute(*this, memoryManager);
-        }
     } else {
         currentState = FINISHED;
     }
 }
 
 void Process::moveToNextLine() {
-    // FIX 3: Do not advance program counter if process encountered a memory fault or is finished
     if (currentState == MEMORY_VIOLATION || currentState == FINISHED || executionStack.empty()) {
         if (currentState != MEMORY_VIOLATION) {
             currentState = FINISHED;
@@ -238,13 +250,17 @@ void Process::moveToNextLine() {
 }
 
 // =========================================================
-// MEMORY & VIOLATION HANDLING (ADDED)
+// MEMORY & VIOLATION HANDLING
 // =========================================================
 
 void Process::triggerMemoryViolation(uint16_t faultAddr, const std::string& timestamp) {
     currentState = MEMORY_VIOLATION;
     invalidAddress = faultAddr;
     errorTimestamp = timestamp;
+}
+
+bool Process::hasMemoryViolation() const {
+    return currentState == MEMORY_VIOLATION;
 }
 
 uint32_t Process::getMemorySize() const { return memorySize; }
@@ -256,6 +272,10 @@ const std::vector<PageTableEntry>& Process::getPageTable() const { return pageTa
 uint16_t Process::getInvalidAddress() const { return invalidAddress; }
 
 std::string Process::getErrorTimestamp() const { return errorTimestamp; }
+
+std::string Process::getMemoryViolationTime() const { return errorTimestamp; }
+
+uint16_t Process::getMemoryViolationAddr() const { return invalidAddress; }
 
 // =========================================================
 // STATE ACCESSORS & GETTERS/SETTERS
@@ -388,6 +408,10 @@ std::vector<std::string> Process::getInstructionStrings() const {
 
 const std::vector<Process::LogEntry>& Process::getExecutionHistory() const {
     return executionHistory;
+}
+
+void Process::setMemorySize(uint32_t newSize) {
+    memorySize = newSize;
 }
 
 void Process::setRunStartTime(const std::string& time) { runStartTime = time; }

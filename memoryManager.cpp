@@ -37,15 +37,16 @@ bool MemoryManager::allocateProcessMemory(Process& proc) {
         return true; 
     }
 
-    // --- DEMAND PAGING FIX ---
-    // Do NOT reject process creation based on total process size vs max_overall_mem.
-    // Processes are allowed to spawn even if physical RAM is full; their pages 
-    // will be loaded into physical frames lazily on-demand via page faults.
-    
     allocated_pids.insert(proc.getPID());
 
-    // Initialize the process's page table entries as not in physical memory yet
+    // Ensure page table covers at least the initial process memory size
+    uint32_t num_pages = (proc.getMemorySize() + mem_per_frame - 1) / mem_per_frame;
     auto& pt = proc.getPageTable();
+    if (pt.size() < num_pages) {
+        pt.resize(num_pages);
+    }
+
+    // Initialize page table entries as not in physical memory yet
     for (auto& pte : pt) {
         pte.valid = false;
         pte.frame_number = -1;
@@ -58,7 +59,6 @@ bool MemoryManager::allocateProcessMemory(Process& proc) {
 void MemoryManager::deallocateProcessMemory(Process& proc) {
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
-    // FIX 1: Subtract memory allocation cleanly if process was allocated
     if (allocated_pids.count(proc.getPID()) > 0) {
         if (current_allocated_mem >= proc.getMemorySize()) {
             current_allocated_mem -= proc.getMemorySize();
@@ -68,7 +68,6 @@ void MemoryManager::deallocateProcessMemory(Process& proc) {
         allocated_pids.erase(proc.getPID());
     }
 
-    // Invalidate process page table entries
     auto& pt = proc.getPageTable();
     for (auto& pte : pt) {
         pte.valid = false;
@@ -76,7 +75,6 @@ void MemoryManager::deallocateProcessMemory(Process& proc) {
         pte.dirty = false;
     }
 
-    // Evict physical frames currently owned by this process
     for (size_t i = 0; i < frame_table.size(); ++i) {
         if (frame_table[i].process_ptr == &proc || frame_table[i].process_name == proc.getName()) {
             frame_table[i].is_free = true;
@@ -91,7 +89,6 @@ void MemoryManager::deallocateProcessMemory(Process& proc) {
 void MemoryManager::deallocateProcessMemory(int pid) {
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
-    // FIX 3: Search frame table for process reference, otherwise rely on allocated_pids
     Process* target_proc = nullptr;
     for (size_t i = 0; i < frame_table.size(); ++i) {
         if (frame_table[i].process_ptr && frame_table[i].process_ptr->getPID() == pid) {
@@ -126,7 +123,7 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
     // 3. Evict frame using LRU if physical frames are full
     if (allocated_frame_id == -1) {
         allocated_frame_id = select_victim_frame_lru();
-        evict_frame(allocated_frame_id); // <--- Triggers write_to_backing_store if victim.dirty!
+        evict_frame(allocated_frame_id); // Writes state to backing store if dirty
     }
 
     // 4. Load page into allocated frame
@@ -136,7 +133,7 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
     target_frame.process_ptr = &proc;
     target_frame.virtual_page_num = page_num;
     target_frame.last_accessed_tick = current_tick;
-    target_frame.dirty = true; // Flag dirty so eviction writes state to file
+    target_frame.dirty = true; 
 
     read_from_backing_store(proc.getName(), page_num, target_frame.buffer);
 
@@ -149,14 +146,26 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
 }
 
 bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t value) {
+    // --- DYNAMIC VIRTUAL MEMORY & PAGE TABLE EXPANSION ---
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
-        trigger_memory_violation(proc, virt_addr);
-        return false;
+        uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
+        proc.setMemorySize(new_size);
+
+        uint32_t required_pages = (new_size + mem_per_frame - 1) / mem_per_frame;
+        auto& pt = proc.getPageTable();
+        if (pt.size() < required_pages) {
+            size_t old_size = pt.size();
+            pt.resize(required_pages);
+            for (size_t i = old_size; i < pt.size(); ++i) {
+                pt[i].valid = false;
+                pt[i].frame_number = -1;
+                pt[i].dirty = false;
+            }
+        }
     }
 
     if (mem_per_frame == 0) return false;
 
-    // FIX 2: Hold lock for the ENTIRE read-modify-write duration to prevent frame eviction race
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
     uint32_t page0 = virt_addr / mem_per_frame;
@@ -180,14 +189,26 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
 }
 
 bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out_value) {
+    // --- DYNAMIC VIRTUAL MEMORY & PAGE TABLE EXPANSION ---
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
-        trigger_memory_violation(proc, virt_addr);
-        return false;
+        uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
+        proc.setMemorySize(new_size);
+
+        uint32_t required_pages = (new_size + mem_per_frame - 1) / mem_per_frame;
+        auto& pt = proc.getPageTable();
+        if (pt.size() < required_pages) {
+            size_t old_size = pt.size();
+            pt.resize(required_pages);
+            for (size_t i = old_size; i < pt.size(); ++i) {
+                pt[i].valid = false;
+                pt[i].frame_number = -1;
+                pt[i].dirty = false;
+            }
+        }
     }
 
     if (mem_per_frame == 0) return false;
 
-    // FIX 2: Hold lock for the ENTIRE read duration
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
     uint32_t page0 = virt_addr / mem_per_frame;
@@ -283,9 +304,7 @@ void MemoryManager::write_to_backing_store(const std::string& proc_name, int pag
         for (uint8_t byte : buffer) {
             ss << std::hex << std::setw(2) << std::setfill('0') << (int)byte << " ";
         }
-
-        std::string formatted_line = ss.str();
-        bs << formatted_line << "\n";
+        bs << ss.str() << "\n";
     }
 }
 

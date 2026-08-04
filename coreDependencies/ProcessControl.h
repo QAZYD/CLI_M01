@@ -75,6 +75,7 @@ public:
     int getCurrentFrameInstructionCount() const;
     void printExecutionLogs() const;
     void clearCommandLogs();
+    void setMemorySize(uint32_t newSize);
 
     // =========================================================
     // FLOW INTERCEPTION CONTROLS
@@ -88,6 +89,7 @@ public:
     const std::vector<LogEntry>& getExecutionHistory() const;
     void setRunStartTime(const std::string& time);
     std::string getRunStartTime() const;
+    
 
     // =========================================================
     // MEMORY METRICS & ACCESSORS
@@ -100,13 +102,19 @@ public:
     uint16_t getInvalidAddress() const;
     void triggerMemoryViolation(uint16_t address, const std::string& timestamp);
 
+    bool hasMemoryViolation() const;
+std::string getMemoryViolationTime() const;
+uint16_t getMemoryViolationAddr() const;
+
 private:
     int pid;
+    
     std::string runStartTime;
     std::string name;
     ProcessState currentState;
     std::vector<LogEntry> commandLogs;
     std::vector<LogEntry> executionHistory;
+    std::vector<std::string> printOutputs;
     
     std::vector<ExecutionFrame> executionStack;
     std::vector<std::shared_ptr<ICommand>> commandList; 
