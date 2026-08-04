@@ -1,27 +1,27 @@
 //Number of CPUs available. The range is [1, 128].
-num-cpu 2
+num-cpu 32
 //The scheduler algorithm: “fcfs” or “rr”.
 scheduler "fcfs"
 //The time slice is given for each processor if a round-robin scheduler is used
 // Has no effect on other schedulers. The range is [1, 2^32].
-quantum-cycles 0
+quantum-cycles 5
 //The frequency of generating processes in the “scheduler-start” command in CPU cycles 
 //The range is [1, 2^32] If one, a new process is generated at the end of each CPU cycle.
 batch-process-freq 1
 //The minimum instructions/command per process. The range is [1, 2^32].
-min-ins 4000
+min-ins 100
 //The maximum instructions/command per process. The range is [1, 2^32].
-max-ins 4000
+max-ins 100
 //Delay before executing the next instruction in CPU cycles. The delay is a “busy-waiting” 
 //scheme wherein the process remains in the CPU. The range is [0, 232] If zero, 
 //each instruction is executed per CPU cycle.
 delay-per-exec 0
 //Maximum memory available in bytes
-max-overall-mem 512
+max-overall-mem 4096
 //The size of memory in bytes per frame. This is also the memory size per page. 
-mem-per-frame 256
+mem-per-frame 64
 //Memory required for each process created via the “scheduler_start” command. 
 min-mem-per-proc 512
 //Let P be the number of pages required by a process and M is the rolled value between min mem-per-proc and max-mem-proc. P can be computed as M/ mem-per-frame.
 max-mem-per-proc 512
-varConfig 0
+varConfig 1
