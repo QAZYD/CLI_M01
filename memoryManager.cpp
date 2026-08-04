@@ -149,6 +149,15 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
     // --- DYNAMIC VIRTUAL MEMORY & PAGE TABLE EXPANSION ---
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
+        
+        // --- ADD THIS CEILING CHECK ---
+       
+       if (new_size > max_overall_mem) {
+            trigger_memory_violation(proc, virt_addr);
+            return false;
+        }
+        // ------------------------------
+
         proc.setMemorySize(new_size);
 
         uint32_t required_pages = (new_size + mem_per_frame - 1) / mem_per_frame;
@@ -165,6 +174,7 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
     }
 
     if (mem_per_frame == 0) return false;
+    // ... rest of your write_uint16 function ...
 
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
@@ -192,6 +202,12 @@ bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out
     // --- DYNAMIC VIRTUAL MEMORY & PAGE TABLE EXPANSION ---
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
+
+        if (new_size > max_overall_mem) {
+            trigger_memory_violation(proc, virt_addr);
+            return false;
+        }
+        
         proc.setMemorySize(new_size);
 
         uint32_t required_pages = (new_size + mem_per_frame - 1) / mem_per_frame;
