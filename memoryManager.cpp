@@ -151,8 +151,8 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
         uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
         
         // --- ADD THIS CEILING CHECK ---
-       
-       if (new_size > max_overall_mem) {
+        uint32_t max_virtual_address_space = 0xFFFF;
+       if (new_size >  max_virtual_address_space) {
             trigger_memory_violation(proc, virt_addr);
             return false;
         }
@@ -202,8 +202,8 @@ bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out
     // --- DYNAMIC VIRTUAL MEMORY & PAGE TABLE EXPANSION ---
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
-
-        if (new_size > max_overall_mem) {
+        uint32_t max_virtual_address_space = 0xFFFF;
+       if (new_size >  max_virtual_address_space) {
             trigger_memory_violation(proc, virt_addr);
             return false;
         }
