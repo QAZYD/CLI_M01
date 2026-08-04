@@ -32,21 +32,25 @@ void MemoryManager::initialize(uint32_t total_mem, uint32_t frame_size) {
 bool MemoryManager::allocateProcessMemory(Process& proc) {
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
-    // Prevent double allocation if called by both Spawner and Scheduler
     if (allocated_pids.count(proc.getPID()) > 0) {
         return true; 
     }
 
-    allocated_pids.insert(proc.getPID());
+    // --- DEADLOCK TRIGGER 1: Process size exceeds physical RAM capacity ---
+    if (proc.getMemorySize() > max_overall_mem) {
+        // Option A: Return false so the Scheduler puts/keeps the process in WAITING
+        // Option B: Set process state directly if Process object supports it
+        // proc.setState(ProcessState::WAITING);
+        return false; 
+    }
 
-    // Ensure page table covers at least the initial process memory size
+    allocated_pids.insert(proc.getPID());
     uint32_t num_pages = (proc.getMemorySize() + mem_per_frame - 1) / mem_per_frame;
     auto& pt = proc.getPageTable();
     if (pt.size() < num_pages) {
         pt.resize(num_pages);
     }
 
-    // Initialize page table entries as not in physical memory yet
     for (auto& pte : pt) {
         pte.valid = false;
         pte.frame_number = -1;
@@ -55,7 +59,6 @@ bool MemoryManager::allocateProcessMemory(Process& proc) {
 
     return true;
 }
-
 void MemoryManager::deallocateProcessMemory(Process& proc) {
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
@@ -108,25 +111,26 @@ int MemoryManager::access_page(Process& proc, uint32_t page_num) {
 
     auto& page_table = proc.getPageTable();
 
-    // 1. Page Hit Check
+    // 1. Page Hit
     if (page_num < page_table.size() && page_table[page_num].valid) {
         int frame_id = page_table[page_num].frame_number;
         frame_table[frame_id].last_accessed_tick = current_tick;
         return frame_id;
     }
 
-    // 2. Page Fault Triggered
+    // --- DEADLOCK TRIGGER 2: Prevent paging if process memory requirements violate limits ---
+    if (proc.getMemorySize() > max_overall_mem) {
+        return -1; // Indicated failure to allocate frame
+    }
+
     pages_paged_in++;
 
     int allocated_frame_id = find_free_frame();
-
-    // 3. Evict frame using LRU if physical frames are full
     if (allocated_frame_id == -1) {
         allocated_frame_id = select_victim_frame_lru();
-        evict_frame(allocated_frame_id); // Writes state to backing store if dirty
+        evict_frame(allocated_frame_id);
     }
 
-    // 4. Load page into allocated frame
     Frame& target_frame = frame_table[allocated_frame_id];
     target_frame.is_free = false;
     target_frame.process_name = proc.getName();
@@ -150,13 +154,11 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
         
-        // --- ADD THIS CEILING CHECK ---
         uint32_t max_virtual_address_space = 0xFFFF;
-       if (new_size >  max_virtual_address_space) {
+        if (new_size > max_virtual_address_space) {
             trigger_memory_violation(proc, virt_addr);
             return false;
         }
-        // ------------------------------
 
         proc.setMemorySize(new_size);
 
@@ -174,23 +176,32 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
     }
 
     if (mem_per_frame == 0) return false;
-    // ... rest of your write_uint16 function ...
 
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
+    // --- PAGE 0 ALLOCATION ---
     uint32_t page0 = virt_addr / mem_per_frame;
     uint32_t offset0 = virt_addr % mem_per_frame;
     int frame0 = access_page(proc, page0);
 
+    // Check 1: Stop execution if page 0 cannot be allocated
+    if (frame0 == -1) return false;
+
+    // --- PAGE 1 ALLOCATION ---
     uint16_t addr1 = virt_addr + 1;
     uint32_t page1 = addr1 / mem_per_frame;
     uint32_t offset1 = addr1 % mem_per_frame;
 
+    int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
+
+    // Check 2: Stop execution if page 1 cannot be allocated
+    if (frame1 == -1) return false;
+
+    // --- WRITE OPERATIONS (Only executed if both pages exist) ---
     frame_table[frame0].buffer[offset0] = static_cast<uint8_t>(value & 0xFF);
     frame_table[frame0].dirty = true;
     proc.getPageTable()[page0].dirty = true;
 
-    int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
     frame_table[frame1].buffer[offset1] = static_cast<uint8_t>((value >> 8) & 0xFF);
     frame_table[frame1].dirty = true;
     proc.getPageTable()[page1].dirty = true;
@@ -199,11 +210,10 @@ bool MemoryManager::write_uint16(Process& proc, uint16_t virt_addr, uint16_t val
 }
 
 bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out_value) {
-    // --- DYNAMIC VIRTUAL MEMORY & PAGE TABLE EXPANSION ---
     if (static_cast<size_t>(virt_addr) + 1 >= proc.getMemorySize()) {
         uint32_t new_size = static_cast<uint32_t>(virt_addr) + 2;
         uint32_t max_virtual_address_space = 0xFFFF;
-       if (new_size >  max_virtual_address_space) {
+        if (new_size > max_virtual_address_space) {
             trigger_memory_violation(proc, virt_addr);
             return false;
         }
@@ -227,22 +237,30 @@ bool MemoryManager::read_uint16(Process& proc, uint16_t virt_addr, uint16_t& out
 
     std::lock_guard<std::recursive_mutex> lock(mem_mutex);
 
+    // --- PAGE 0 ACCESS ---
     uint32_t page0 = virt_addr / mem_per_frame;
     uint32_t offset0 = virt_addr % mem_per_frame;
     int frame0 = access_page(proc, page0);
 
+    // Check 1: Stop execution if page 0 cannot be allocated
+    if (frame0 == -1) return false;
+
+    // --- PAGE 1 ACCESS ---
     uint16_t addr1 = virt_addr + 1;
     uint32_t page1 = addr1 / mem_per_frame;
     uint32_t offset1 = addr1 % mem_per_frame;
-
-    uint8_t low_byte = frame_table[frame0].buffer[offset0];
     int frame1 = (page1 == page0) ? frame0 : access_page(proc, page1);
+
+    // Check 2: Stop execution if page 1 cannot be allocated
+    if (frame1 == -1) return false;
+
+    // --- READ OPERATIONS ---
+    uint8_t low_byte = frame_table[frame0].buffer[offset0];
     uint8_t high_byte = frame_table[frame1].buffer[offset1];
 
     out_value = static_cast<uint16_t>(low_byte) | (static_cast<uint16_t>(high_byte) << 8);
     return true;
 }
-
 uint32_t MemoryManager::getTotalMemory() const { 
     return max_overall_mem; 
 }
